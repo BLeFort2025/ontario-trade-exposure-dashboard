@@ -99,22 +99,32 @@ def get_chapter_level_comparison(year: str) -> pd.DataFrame:
 
 available_years = get_available_years()
 
+# Set default to most recent full calendar year (2025 or 2024) rather than partial 2026 YTD
+default_year = "2025" if "2025" in available_years else ("2024" if "2024" in available_years else available_years[-1])
+
 # Initialize session state for selected_year
 if "selected_year" not in st.session_state or st.session_state["selected_year"] not in available_years:
-    st.session_state["selected_year"] = available_years[-1] if available_years else "2026"
+    st.session_state["selected_year"] = default_year
 
 st.sidebar.markdown("### ⚙️ Dashboard Controls")
+
+# Format display labels in sidebar dropdown to clearly mark partial-year 2026
+def format_year_label(yr: str) -> str:
+    if yr == "2026":
+        return "2026 (YTD Partial Year)"
+    return f"{yr} (Full Year)"
 
 selected_year_index = (
     available_years.index(st.session_state["selected_year"])
     if st.session_state["selected_year"] in available_years
-    else max(len(available_years) - 1, 0)
+    else available_years.index(default_year)
 )
 
 selected_year = st.sidebar.selectbox(
     "Select Reporting Year",
     options=available_years,
     index=selected_year_index,
+    format_func=format_year_label,
     help="Select the reference year for trade flow analysis and headline metrics.",
 )
 
@@ -125,7 +135,8 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
     **📌 Methodology & Scope**
-    - **Focus**: Ontario ↔ U.S. 50 States + D.C.
+    - **Geographic Scope**: **Ontario ↔ U.S. 50 States + D.C.**
+      *(Captures ~80% of Ontario's total global exports. Ontario's total agri-food exports to the **World** is ~$28B–$30B CAD).*
     - **Currency**: Canadian Dollars (CAD)
     - **HS Chapter 06**: Classified as *Primary Agriculture* per OFA convention
     - **HS Chapter 87**: Ag vehicles/trailers (8701/8716) separated from automotive
@@ -141,6 +152,13 @@ st.markdown(
     "</h4>",
     unsafe_allow_html=True,
 )
+
+if selected_year == "2026":
+    st.info(
+        "ℹ️ **Note on 2026 Data:** Statistics Canada data for 2026 is **Year-to-Date (YTD, ~6 months)**. "
+        "The $10.52B in agri-food exports represents a half-year of trade, pacing on track for **~$21B+ annualized**. "
+        "For complete annual baselines, select **2024** or **2025**."
+    )
 
 # ── 4. Brief Description ─────────────────────────────────────────────
 
