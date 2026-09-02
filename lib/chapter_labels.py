@@ -14,21 +14,28 @@ classified as **Primary Agriculture** per OFA convention (NAICS 1114).
 CHAPTER_LABELS = {
     "01": "🐄 Live Animals",
     "02": "🥩 Meat (Beef, Pork, Poultry)",
+    "03": "🐟 Fish & Seafood",
     "04": "🧀 Dairy, Eggs & Honey",
+    "05": "🦴 Animal Products (NES)",
     "06": "🌸 Floriculture & Nursery (Primary Ag)",
     "07": "🥬 Vegetables (Greenhouse & Field)",
     "08": "🍎 Fruit & Berries",
+    "09": "☕ Coffee, Tea & Spices",
     "10": "🌾 Cereals (Grain, Corn, Wheat)",
     "11": "🏭 Milling Products (Flour, Malt)",
     "12": "🫘 Oilseeds & Forage",
+    "13": "🌿 Lac, Gums & Resins",
+    "14": "🧺 Vegetable Plaiting Materials",
     "15": "🫒 Fats & Oils",
-    "16": "🌭 Prepared Meats",
+    "16": "🌭 Prepared Meats & Seafood",
     "17": "🍁 Sugar & Confectionery",
+    "18": "🍫 Cocoa & Chocolate",
     "19": "🍞 Bakery, Pasta & Cereal Prep",
     "20": "🥫 Preserved Vegetables & Fruit",
     "21": "🧂 Misc Edible Preparations",
     "22": "🍷 Beverages, Wine & Spirits",
     "23": "🐕 Animal Feed & Residues",
+    "24": "🚬 Tobacco & Substitutes",
     "31": "🧪 Fertilizers",
     "84": "⚙️ Machinery & Parts",
     "87": "🚗 Vehicles & Trailers",
@@ -41,21 +48,28 @@ CHAPTER_LABELS = {
 CHAPTER_SHORT = {
     "01": "Live Animals",
     "02": "Meat",
+    "03": "Fish/Seafood",
     "04": "Dairy/Eggs",
+    "05": "Animal Products",
     "06": "Floriculture/Nursery",
     "07": "Vegetables",
     "08": "Fruit/Berries",
+    "09": "Coffee/Tea/Spices",
     "10": "Cereals",
     "11": "Milling",
     "12": "Oilseeds",
+    "13": "Gums/Resins",
+    "14": "Plaiting Materials",
     "15": "Fats/Oils",
     "16": "Prepared Meats",
     "17": "Sugar/Confectionery",
+    "18": "Cocoa/Chocolate",
     "19": "Bakery/Pasta",
     "20": "Preserved Veg/Fruit",
     "21": "Edible Preparations",
     "22": "Beverages/Spirits",
     "23": "Animal Feed",
+    "24": "Tobacco",
     "31": "Fertilizers",
     "84": "Machinery/Parts",
     "87": "Vehicles/Trailers",
@@ -91,17 +105,18 @@ def is_ag_vehicle(hs6_code: str) -> bool:
 
 
 # ── Agri-Food vs Industrial Classification ──────────────────────────
-# Chapters that are core agri-food (primary ag + food manufacturing)
+# All 24 Harmonized System chapters covering Primary Agriculture & Food/Agri-Food
 AGRI_FOOD_CHAPTERS = {
-    "01", "02", "04", "06", "07", "08", "10", "11", "12",
-    "15", "16", "17", "19", "20", "21", "22", "23",
+    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+    "21", "22", "23", "24",
 }
 
 # Chapters that are farm inputs / equipment
 FARM_INPUT_CHAPTERS = {"31", "84", "87"}
 
 # Chapters where Ontario is classified as Primary Agriculture
-PRIMARY_AG_CHAPTERS = {"01", "06", "07", "08", "10", "12"}
+PRIMARY_AG_CHAPTERS = {"01", "03", "06", "07", "08", "10", "12", "24"}
 
 
 def is_agri_food(chapter: str) -> bool:
