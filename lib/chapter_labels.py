@@ -36,6 +36,13 @@ CHAPTER_LABELS = {
     "22": "🍷 Beverages, Wine & Spirits",
     "23": "🐕 Animal Feed & Residues",
     "24": "🚬 Tobacco & Substitutes",
+    # Agricultural Derivatives (Outside HS 01-24)
+    "29-AG": "🍬 HS 29 — Bio-Sweeteners (Sorbitol)",
+    "33-AG": "🌿 HS 33 — Essential Oils & Food Flavorings",
+    "35": "🧪 HS 35 — Protein Derivatives & Modified Starches",
+    "38-AG": "🌱 HS 38 — Crop Protection & Ag Fatty Acids",
+    "41": "👞 HS 41 — Raw Hides & Skins",
+    # Farm Inputs & Equipment
     "31": "🧪 Fertilizers",
     "84": "⚙️ Machinery & Parts",
     "87": "🚗 Vehicles & Trailers",
@@ -70,6 +77,11 @@ CHAPTER_SHORT = {
     "22": "Beverages/Spirits",
     "23": "Animal Feed",
     "24": "Tobacco",
+    "29-AG": "Bio-Sweeteners",
+    "33-AG": "Essential Oils & Flavorings",
+    "35": "Protein & Starches",
+    "38-AG": "Crop Protection & Fatty Acids",
+    "41": "Raw Hides & Skins",
     "31": "Fertilizers",
     "84": "Machinery/Parts",
     "87": "Vehicles/Trailers",
@@ -104,24 +116,33 @@ def is_ag_vehicle(hs6_code: str) -> bool:
     return any(code.startswith(prefix) for prefix in AG_VEHICLE_HS4_PREFIXES)
 
 
-# ── Agri-Food vs Industrial Classification ──────────────────────────
-# All 24 Harmonized System chapters covering Primary Agriculture & Food/Agri-Food
+# All Harmonized System chapters covering Primary Agriculture & Food/Agri-Food
 AGRI_FOOD_CHAPTERS = {
     "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
     "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
     "21", "22", "23", "24",
+    # Agricultural Derivatives
+    "29-AG", "33-AG", "35", "41",
 }
 
-# Chapters that are farm inputs / equipment
-FARM_INPUT_CHAPTERS = {"31", "84", "87"}
+# Agricultural derivatives outside chapters 01-24
+AGRI_DERIVATIVE_CHAPTERS = {"29-AG", "33-AG", "35", "38-AG", "41"}
+
+# Chapters that are farm inputs / equipment / crop protection
+FARM_INPUT_CHAPTERS = {"31", "38-AG", "84", "87", "87-AG"}
 
 # Chapters where Ontario is classified as Primary Agriculture
-PRIMARY_AG_CHAPTERS = {"01", "03", "06", "07", "08", "10", "12", "24"}
+PRIMARY_AG_CHAPTERS = {"01", "03", "06", "07", "08", "10", "12", "24", "41"}
 
 
 def is_agri_food(chapter: str) -> bool:
     """Return True if chapter is core agri-food."""
     return chapter in AGRI_FOOD_CHAPTERS
+
+
+def is_agri_derivative(chapter: str) -> bool:
+    """Return True if chapter is an agricultural derivative."""
+    return chapter in AGRI_DERIVATIVE_CHAPTERS
 
 
 def is_farm_input(chapter: str) -> bool:
@@ -183,6 +204,10 @@ HIGH_FEASIBILITY_CHAPTERS = {
     "20",  # Preserved vegetables, fruits, juices, jams
     "22",  # Beverages, spirits, wine, cider, beer
     "23",  # Animal feed, oilcake, food industry residues
+    "29-AG",  # Bio-sweeteners (Sorbitol)
+    "33-AG",  # Essential oils & food/beverage flavorings
+    "35",  # Protein derivatives (casein, whey, gelatin, starches)
+    "41",  # Raw hides & skins
 }
 
 # High-feasibility fruit lines in Chapter 08
@@ -251,33 +276,33 @@ def get_feasibility_tier(hs6_code: str, hs2_chapter: str = None, commodity_desc:
 VALUE_ADD_COMPLEXES = {
     "Soybean Complex": {
         "icon": "🫘",
-        "description": "Raw soybeans exported in bulk vs. processed meal, oil, and protein imported.",
+        "description": "Raw soybeans exported in bulk vs. processed meal, oil, fatty acids, and protein imported.",
         "raw_prefixes": ("1201",),  # Raw soybeans
-        "processed_prefixes": ("2304", "1507", "210610"),  # Soybean oilcake/meal, soybean oil, soy protein
+        "processed_prefixes": ("2304", "1507", "210610", "3823"),  # Soybean oilcake/meal, soyoil, soy protein, fatty acids
     },
     "Corn & Grain Complex": {
         "icon": "🌽",
         "description": "Feed grains exported vs. value-added animal feed, starch, sweeteners, and mixes imported.",
         "raw_prefixes": ("1005", "1001"),  # Corn, wheat
-        "processed_prefixes": ("2309", "170230", "170240", "190120", "110812", "1101", "1102"),
+        "processed_prefixes": ("2309", "170230", "170240", "190120", "110812", "1101", "1102", "3505", "290544", "382460"),
     },
     "Red Meat & Livestock Complex": {
         "icon": "🥩",
-        "description": "Live slaughter animals & primals exported vs. processed deli, sausages, and prepared meats imported.",
+        "description": "Live slaughter animals & primals exported vs. processed deli, sausages, gelatin, and hides imported.",
         "raw_prefixes": ("0102", "0103", "0201", "0202", "0203"),  # Live cattle/swine, fresh beef/pork
-        "processed_prefixes": ("1601", "1602", "1501", "1502"),  # Sausages, prepared meats, fats
+        "processed_prefixes": ("1601", "1602", "1501", "1502", "3503", "4101", "4102", "4103"),  # Sausages, prepared meats, fats, gelatin, hides
     },
     "Dairy Value Chain": {
         "icon": "🧀",
-        "description": "Raw milk/cream production vs. specialty cheeses, whey powders, and dairy proteins imported.",
+        "description": "Raw milk/cream production vs. specialty cheeses, whey powders, casein, and milk proteins imported.",
         "raw_prefixes": ("0401", "0402"),  # Milk, cream
-        "processed_prefixes": ("0406", "0404", "0405", "350220"),  # Cheeses, whey, butter, milk protein
+        "processed_prefixes": ("0406", "0404", "0405", "3501", "3502"),  # Cheeses, whey, butter, casein, milk albumins
     },
     "Greenhouse & Horticultural Complex": {
         "icon": "🍅",
-        "description": "Fresh field/greenhouse produce exported vs. canned, preserved, frozen, and sauces imported.",
+        "description": "Fresh field/greenhouse produce exported vs. canned, preserved, sauces, and essential oils/flavorings imported.",
         "raw_prefixes": ("0702", "0707", "070960", "0705"),  # Fresh tomatoes, cucumbers, peppers, lettuce
-        "processed_prefixes": ("2002", "2005", "210320", "0710"),  # Canned tomatoes, sauces, frozen veg
+        "processed_prefixes": ("2002", "2005", "210320", "0710", "3301", "330210"),  # Canned veg, sauces, essential oils, food flavorings
     },
 }
 

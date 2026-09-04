@@ -207,8 +207,10 @@ def main():
             'combine': 'Agricultural machinery parts',
             'maple': 'Maple syrup & sugar',
             'soybean': 'Oilseeds & feed',
+            'whey': 'Dairy protein concentrates & albumins',
+            'starch': 'Modified corn & wheat starches',
             'fertilizer': 'Farm input costs',
-            'wine': 'Beverages & spirits'
+            'wine': 'Beverages & spirits',
         }
         
         for term, desc in suggested.items():

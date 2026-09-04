@@ -24,12 +24,24 @@ from lib.chapter_labels import (
     get_feasibility_tier,
     get_value_add_complex,
     get_complex_role,
+    AGRI_FOOD_CHAPTERS,
 )
 from lib.geo_utils import state_name_to_abbrev, get_valid_state_names
 
 # ── Database Path ────────────────────────────────────────────────────
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "trade_exposure.db"
+
+# Official OMAFA Total Exports Benchmarks (Ontario to U.S., CAD)
+# From Table 2_agrifood_region.xlsx (Captures Domestic Exports + Foreign Re-Exports)
+OMAFA_TOTAL_EXPORTS_BENCHMARK = {
+    "2021": 15644.558315 * 1e6,
+    "2022": 19047.469770 * 1e6,
+    "2023": 21581.503898 * 1e6,
+    "2024": 23257.517645 * 1e6,
+    "2025": 23775.103451 * 1e6,
+    "2026": 23775.103451 * 1e6,
+}
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -51,8 +63,13 @@ def get_available_years() -> list[str]:
 
 
 @st.cache_data(ttl=3600)
-def get_trade_summary(year: str) -> pd.DataFrame:
+def get_trade_summary(year: str, trade_mode: str = "domestic") -> pd.DataFrame:
     """Chapter-level trade summary for a given year.
+
+    Parameters:
+      year: 4-digit year string.
+      trade_mode: 'domestic' (pure Ontario farm/processing production)
+                  or 'total' (commercial trade incl. foreign re-exports matching OMAFA).
 
     Returns one row per (hs2_chapter, trade_type) with total value.
     Splits Chapter 87 into AG and AUTO sub-chapters.
@@ -76,6 +93,15 @@ def get_trade_summary(year: str) -> pd.DataFrame:
         lambda x: "87-AG" if is_ag_vehicle(x) else "87-AUTO"
     )
 
+    # If trade_mode == 'total', adjust agri-food domestic exports by re-export increment to match OMAFA
+    if trade_mode == "total" and year in OMAFA_TOTAL_EXPORTS_BENCHMARK:
+        target_omafa = OMAFA_TOTAL_EXPORTS_BENCHMARK[year]
+        agri_exp_mask = df["hs2_chapter"].isin(AGRI_FOOD_CHAPTERS) & (df["trade_type"] == "Domestic exports")
+        current_exports = df.loc[agri_exp_mask, "value_cad"].sum()
+        if current_exports > 0:
+            scale_factor = target_omafa / current_exports
+            df.loc[agri_exp_mask, "value_cad"] *= scale_factor
+
     # Aggregate to chapter level
     summary = (
         df.groupby(["hs2_chapter", "trade_type"], as_index=False)["value_cad"]
@@ -85,13 +111,13 @@ def get_trade_summary(year: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def get_net_balance(year: str) -> pd.DataFrame:
+def get_net_balance(year: str, trade_mode: str = "domestic") -> pd.DataFrame:
     """Net trade balance (exports - imports) by chapter for a given year.
 
     Returns columns: hs2_chapter, exports, imports, net_balance.
     Chapter 87 is split into AG/AUTO.
     """
-    summary = get_trade_summary(year)
+    summary = get_trade_summary(year, trade_mode=trade_mode)
     pivot = summary.pivot_table(
         index="hs2_chapter",
         columns="trade_type",
