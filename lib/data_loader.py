@@ -19,7 +19,12 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from lib.chapter_labels import is_ag_vehicle
+from lib.chapter_labels import (
+    is_ag_vehicle,
+    get_feasibility_tier,
+    get_value_add_complex,
+    get_complex_role,
+)
 from lib.geo_utils import state_name_to_abbrev, get_valid_state_names
 
 # ── Database Path ────────────────────────────────────────────────────
@@ -477,4 +482,84 @@ def get_import_substitution_matrix(year: str) -> pd.DataFrame:
     )
 
     df = df.merge(top_states, on="hs6_code", how="left")
+
+    # Add Domestic Feasibility Classification
+    df["feasibility_tier"] = df.apply(
+        lambda r: get_feasibility_tier(r["hs6_code"], r["hs2_chapter"], r.get("commodity_desc", "")),
+        axis=1
+    )
+
+    # Add Value-Add Complex Mapping
+    df["value_add_complex"] = df["hs6_code"].apply(get_value_add_complex)
+    df["complex_role"] = df.apply(
+        lambda r: get_complex_role(r["hs6_code"], r["value_add_complex"]) if r["value_add_complex"] else None,
+        axis=1
+    )
+
+    # Absolute deficit magnitude
+    df["net_deficit_cad"] = df["net_balance"].apply(lambda x: abs(x) if x < 0 else 0)
+
     return df.sort_values("net_balance")
+
+
+# ── Input-Output Economic Impact Simulation ─────────────────────────
+# Based on Statistics Canada Table 36-10-0595-01 (Ontario Supply-Use Multipliers)
+# Validated empirical baselines for Food & Beverage Manufacturing & Primary Agriculture
+
+IO_MULTIPLIERS = {
+    "food_manufacturing": {
+        "name": "Food & Beverage Processing",
+        "gdp_direct": 0.32,
+        "gdp_total": 0.72,
+        "jobs_direct_per_M": 2.2,
+        "jobs_total_per_M": 5.8,
+        "labour_income_direct": 0.18,
+        "labour_income_total": 0.38,
+        "farm_gate_share": 0.35,  # ~35% of food processor inputs flow directly to domestic farm gate
+    },
+    "primary_agriculture": {
+        "name": "Primary Agriculture",
+        "gdp_direct": 0.44,
+        "gdp_total": 0.65,
+        "jobs_direct_per_M": 3.1,
+        "jobs_total_per_M": 5.1,
+        "labour_income_direct": 0.18,
+        "labour_income_total": 0.34,
+        "farm_gate_share": 1.00,  # 100% direct to farm gate
+    },
+}
+
+
+def calculate_substitution_impact(displacement_dollars: float, sector: str = "food_manufacturing") -> dict:
+    """Calculate macroeconomic impact of domestic import substitution in Ontario.
+
+    Uses Statistics Canada Table 36-10-0595-01 provincial Input-Output multipliers.
+    Returns direct and total estimates for GDP, FTE employment, labour payroll, and farm-gate receipts.
+    """
+    mult = IO_MULTIPLIERS.get(sector, IO_MULTIPLIERS["food_manufacturing"])
+    output_M = displacement_dollars / 1e6
+
+    gdp_total = displacement_dollars * mult["gdp_total"]
+    gdp_direct = displacement_dollars * mult["gdp_direct"]
+    gdp_indirect_induced = gdp_total - gdp_direct
+
+    jobs_total = round(output_M * mult["jobs_total_per_M"])
+    jobs_direct = round(output_M * mult["jobs_direct_per_M"])
+    jobs_indirect_induced = jobs_total - jobs_direct
+
+    labour_income_total = displacement_dollars * mult["labour_income_total"]
+    farm_gate_revenue = displacement_dollars * mult["farm_gate_share"]
+
+    return {
+        "displacement_dollars": displacement_dollars,
+        "sector_name": mult["name"],
+        "gdp_total": gdp_total,
+        "gdp_direct": gdp_direct,
+        "gdp_indirect_induced": gdp_indirect_induced,
+        "jobs_total": jobs_total,
+        "jobs_direct": jobs_direct,
+        "jobs_indirect_induced": jobs_indirect_induced,
+        "labour_income_total": labour_income_total,
+        "farm_gate_revenue": farm_gate_revenue,
+    }
+

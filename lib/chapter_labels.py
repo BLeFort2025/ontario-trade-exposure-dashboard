@@ -132,3 +132,175 @@ def is_farm_input(chapter: str) -> bool:
 def is_primary_ag(chapter: str) -> bool:
     """Return True if chapter is primary agriculture."""
     return chapter in PRIMARY_AG_CHAPTERS
+
+
+# ── Domestic Substitution Feasibility Classification ────────────────
+# Tier 1: High Domestic Feasibility (Immediate/Low-Hanging Fruit)
+# Tier 2: Moderate / Seasonal / Capital-Intensive
+# Tier 3: Low / Non-Substitutable (Tropical & Exotic / Climate-Limited)
+
+# Specific non-substitutable HS-4 prefixes (tropical/climate-limited)
+TROPICAL_HS4_PREFIXES = {
+    "0801",  # Coconuts, Brazil nuts, cashews
+    "0803",  # Bananas & plantains
+    "0804",  # Dates, figs, pineapples, avocados, guavas, mangoes
+    "0805",  # Citrus fruit (oranges, lemons, limes, grapefruit)
+    "0807",  # Melons, watermelons, papayas
+    "0901",  # Coffee
+    "0902",  # Tea
+    "0904",  # Pepper
+    "0905",  # Vanilla
+    "0906",  # Cinnamon
+    "0907",  # Cloves
+    "0908",  # Nutmeg, mace, cardamoms
+    "0909",  # Anise, badian, fennel, coriander, cumin
+    "0910",  # Ginger, saffron, turmeric, thyme, bay leaves, curry
+    "1006",  # Rice (paddy, husked, semi-milled)
+    "1509",  # Olive oil
+    "1510",  # Other olive oils
+    "1511",  # Palm oil
+    "1513",  # Coconut, palm kernel or babassu oil
+    "1801",  # Cocoa beans, whole or broken, raw or roasted
+    "1802",  # Cocoa shells, husks, skins
+    "1803",  # Cocoa paste
+    "1804",  # Cocoa butter, fat and oil
+    "1805",  # Cocoa powder, not sweetened
+}
+
+# High-feasibility Ontario domestic chapters
+HIGH_FEASIBILITY_CHAPTERS = {
+    "01",  # Live animals (cattle, swine, sheep, poultry)
+    "02",  # Meat (pork, beef, poultry)
+    "04",  # Dairy, eggs, natural honey
+    "06",  # Floriculture, nursery, greenhouse plants
+    "07",  # Vegetables (field & greenhouse tomatoes, peppers, cucumbers)
+    "10",  # Cereals (corn, wheat, barley, oats)
+    "11",  # Milling products, malt, starches
+    "12",  # Oilseeds (soybeans, canola, forage seeds)
+    "15",  # Animal & vegetable fats and oils (canola oil, lard, tallow)
+    "16",  # Prepared meats, sausages, preserved meats
+    "19",  # Bakery, pastry, pasta, cereal preparations
+    "20",  # Preserved vegetables, fruits, juices, jams
+    "22",  # Beverages, spirits, wine, cider, beer
+    "23",  # Animal feed, oilcake, food industry residues
+}
+
+# High-feasibility fruit lines in Chapter 08
+ONTARIO_FRUIT_HS4_PREFIXES = {
+    "0808",  # Apples, pears and quinces
+    "0809",  # Apricots, cherries, peaches, plums
+    "0810",  # Strawberries, raspberries, blackberries, cranberries, blueberries
+    "0811",  # Fruit and nuts, uncooked or cooked by steaming, frozen
+    "0812",  # Fruit and nuts, provisionally preserved
+    "0813",  # Fruit, dried (apples, prunes, etc.)
+}
+
+
+def get_feasibility_tier(hs6_code: str, hs2_chapter: str = None, commodity_desc: str = "") -> str:
+    """Classify an HS commodity into one of three substitution feasibility tiers.
+    
+    Returns:
+      '🟢 High Domestic Feasibility'
+      '🟡 Moderate / Seasonal'
+      '⚪ Low / Non-Substitutable (Tropical/Exotic)'
+      '⚙️ Industrial / Non-Ag'
+    """
+    code = str(hs6_code).strip()
+    ch2 = str(hs2_chapter).strip().zfill(2) if hs2_chapter else code[:2]
+    
+    # Check if not in Agri-Food
+    if ch2 not in AGRI_FOOD_CHAPTERS:
+        return "⚙️ Industrial / Non-Ag"
+        
+    # Check Tropical / Non-Substitutable
+    hs4 = code[:4]
+    if hs4 in TROPICAL_HS4_PREFIXES:
+        return "⚪ Low / Non-Substitutable (Tropical/Exotic)"
+        
+    # Cane sugar check
+    if code.startswith("17011") or code.startswith("170112"):
+        return "⚪ Low / Non-Substitutable (Tropical/Exotic)"
+        
+    # High-Feasibility Domestic Chapters
+    if ch2 in HIGH_FEASIBILITY_CHAPTERS:
+        return "🟢 High Domestic Feasibility"
+        
+    # Fruit Chapter 08: check if Ontario-grown
+    if ch2 == "08":
+        if hs4 in ONTARIO_FRUIT_HS4_PREFIXES:
+            return "🟢 High Domestic Feasibility"
+        return "🟡 Moderate / Seasonal"
+        
+    # Chocolate products (HS 1806) - high feasibility in Ontario (Ferrero, Mondelez, Mars)
+    if code.startswith("1806"):
+        return "🟢 High Domestic Feasibility"
+        
+    # Sugar confectionery & maple/glucose (HS 1702, 1704)
+    if ch2 == "17":
+        if code.startswith("1702") or code.startswith("1704"):
+            return "🟢 High Domestic Feasibility"
+        return "🟡 Moderate / Seasonal"
+        
+    # Default for remaining agri-food lines
+    return "🟡 Moderate / Seasonal"
+
+
+# ── Agricultural Value-Add Complexes (Raw vs. Processed) ─────────────
+# Links raw agricultural export commodities to downstream processed imports
+
+VALUE_ADD_COMPLEXES = {
+    "Soybean Complex": {
+        "icon": "🫘",
+        "description": "Raw soybeans exported in bulk vs. processed meal, oil, and protein imported.",
+        "raw_prefixes": ("1201",),  # Raw soybeans
+        "processed_prefixes": ("2304", "1507", "210610"),  # Soybean oilcake/meal, soybean oil, soy protein
+    },
+    "Corn & Grain Complex": {
+        "icon": "🌽",
+        "description": "Feed grains exported vs. value-added animal feed, starch, sweeteners, and mixes imported.",
+        "raw_prefixes": ("1005", "1001"),  # Corn, wheat
+        "processed_prefixes": ("2309", "170230", "170240", "190120", "110812", "1101", "1102"),
+    },
+    "Red Meat & Livestock Complex": {
+        "icon": "🥩",
+        "description": "Live slaughter animals & primals exported vs. processed deli, sausages, and prepared meats imported.",
+        "raw_prefixes": ("0102", "0103", "0201", "0202", "0203"),  # Live cattle/swine, fresh beef/pork
+        "processed_prefixes": ("1601", "1602", "1501", "1502"),  # Sausages, prepared meats, fats
+    },
+    "Dairy Value Chain": {
+        "icon": "🧀",
+        "description": "Raw milk/cream production vs. specialty cheeses, whey powders, and dairy proteins imported.",
+        "raw_prefixes": ("0401", "0402"),  # Milk, cream
+        "processed_prefixes": ("0406", "0404", "0405", "350220"),  # Cheeses, whey, butter, milk protein
+    },
+    "Greenhouse & Horticultural Complex": {
+        "icon": "🍅",
+        "description": "Fresh field/greenhouse produce exported vs. canned, preserved, frozen, and sauces imported.",
+        "raw_prefixes": ("0702", "0707", "070960", "0705"),  # Fresh tomatoes, cucumbers, peppers, lettuce
+        "processed_prefixes": ("2002", "2005", "210320", "0710"),  # Canned tomatoes, sauces, frozen veg
+    },
+}
+
+
+def get_value_add_complex(hs6_code: str) -> str:
+    """Return the name of the agricultural value-add complex, or None."""
+    code = str(hs6_code).strip()
+    for name, data in VALUE_ADD_COMPLEXES.items():
+        if any(code.startswith(p) for p in data["raw_prefixes"]):
+            return name
+        if any(code.startswith(p) for p in data["processed_prefixes"]):
+            return name
+    return None
+
+
+def get_complex_role(hs6_code: str, complex_name: str) -> str:
+    """Return 'Raw / Primary Commodity' or 'Value-Added Processed' within a complex."""
+    code = str(hs6_code).strip()
+    if complex_name not in VALUE_ADD_COMPLEXES:
+        return "Other"
+    data = VALUE_ADD_COMPLEXES[complex_name]
+    if any(code.startswith(p) for p in data["raw_prefixes"]):
+        return "Raw / Primary Commodity"
+    if any(code.startswith(p) for p in data["processed_prefixes"]):
+        return "Value-Added Processed"
+    return "Other"
