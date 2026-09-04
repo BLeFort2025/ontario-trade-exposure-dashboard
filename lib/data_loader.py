@@ -324,8 +324,13 @@ def get_us_section338_tariffs() -> pd.DataFrame:
 def get_tariff_matched_imports(year: str) -> pd.DataFrame:
     """Join Ontario imports against Canada's counter-tariff schedule.
 
-    Matches on HS-6 subheading to identify which imported goods face
-    retaliatory tariffs. Returns trade rows augmented with tariff rate.
+    Matches on clean 6-digit HS code (hs6_clean) to identify which imported goods face
+    retaliatory tariffs. Augments each line with:
+      - tariff_rate_pct (headline tariff)
+      - remission_status (plain-language status)
+      - is_remission_waived (bool)
+      - net_tariff_pct (0% if waived, else headline)
+      - tariff_dollars_gross, tariff_dollars_net, tariff_dollars_saved
     """
     conn = _get_conn()
     query = """
@@ -333,8 +338,11 @@ def get_tariff_matched_imports(year: str) -> pd.DataFrame:
                sum(t.value_cad) as value_cad,
                ct.tariff_rate_pct, ct.indicative_description as tariff_desc
         FROM state_hs_trade t
-        LEFT JOIN canada_counter_tariffs ct
-            ON t.hs6_code = ct.hs6_subheading
+        LEFT JOIN (
+            SELECT hs6_clean, max(tariff_rate_pct) as tariff_rate_pct, min(indicative_description) as indicative_description
+            FROM canada_counter_tariffs
+            GROUP BY hs6_clean
+        ) ct ON t.hs6_code = ct.hs6_clean
         WHERE t.trade_type = 'Imports'
           AND substr(t.ref_date, 1, 4) = ?
         GROUP BY t.hs6_code, t.commodity_desc, t.hs2_chapter, t.state,
@@ -342,6 +350,37 @@ def get_tariff_matched_imports(year: str) -> pd.DataFrame:
     """
     df = pd.read_sql(query, conn, params=[year])
     df["has_tariff"] = df["tariff_rate_pct"].notna()
+
+    # Remission classification per Finance Canada & CBSA Customs Notice 25-19
+    def classify_remission(row):
+        if not row["has_tariff"]:
+            return "No Tariff", False, 0.0
+        code = str(row.get("hs6_code", "")).strip()
+        ch2 = str(row.get("hs2_chapter", "")).strip()
+        
+        # Direct Ag Machinery Parts (Confirmed eligible by Finance Canada Sept 3, 2026)
+        if code in ("843390", "843320"):
+            return "🟢 Waived (Code 25-0466C - Farm Machinery)", True, 0.0
+        # Food & Beverage Processing Inputs (NAICS 31-33)
+        if code == "190120" or ch2 == "04":
+            return "🟢 Waived (Code 25-0466C - Food Processing)", True, 0.0
+        # Trailers & Transportation (Excluded from horizontal remission)
+        if code.startswith("8716"):
+            return "🔴 Active Surtax (Trailers/Transport Excluded)", False, float(row["tariff_rate_pct"])
+        # Commercial / Turf Machinery (Excluded from primary ag)
+        if code == "843311":
+            return "🔴 Active Surtax (Commercial Turf / Mowers)", False, float(row["tariff_rate_pct"])
+        
+        return "🔴 Active Surtax (Non-Ag / Industrial)", False, float(row["tariff_rate_pct"])
+
+    rem_info = df.apply(classify_remission, axis=1)
+    df["remission_status"] = [r[0] for r in rem_info]
+    df["is_remission_waived"] = [r[1] for r in rem_info]
+    df["net_tariff_pct"] = [r[2] for r in rem_info]
+    df["tariff_dollars_gross"] = df["value_cad"] * (df["tariff_rate_pct"].fillna(0) / 100.0)
+    df["tariff_dollars_net"] = df["value_cad"] * (df["net_tariff_pct"].fillna(0) / 100.0)
+    df["tariff_dollars_saved"] = df["tariff_dollars_gross"] - df["tariff_dollars_net"]
+
     return df
 
 
@@ -408,7 +447,10 @@ def get_import_substitution_matrix(year: str) -> pd.DataFrame:
 
     # Join counter-tariff info
     tariffs = get_canada_counter_tariffs()
-    tariff_map = tariffs.set_index("hs6_subheading")["tariff_rate_pct"].to_dict()
+    if "hs6_clean" in tariffs.columns:
+        tariff_map = tariffs.groupby("hs6_clean")["tariff_rate_pct"].max().to_dict()
+    else:
+        tariff_map = tariffs.set_index("hs6_subheading")["tariff_rate_pct"].to_dict()
     df["counter_tariff_pct"] = df["hs6_code"].map(tariff_map)
     df["faces_counter_tariff"] = df["counter_tariff_pct"].notna()
 
