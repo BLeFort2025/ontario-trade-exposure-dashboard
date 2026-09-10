@@ -12,6 +12,18 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
+import sys
+from pathlib import Path
+
+# Ensure root directory is on sys.path for Streamlit Cloud page execution
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+# Force reload lib.data_loader if already loaded in memory to prevent stale cache on hot reloads
+import importlib
+if "lib.data_loader" in sys.modules:
+    importlib.reload(sys.modules["lib.data_loader"])
 
 from lib.data_loader import (
     get_available_years,
