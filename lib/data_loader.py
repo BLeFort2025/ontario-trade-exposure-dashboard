@@ -903,3 +903,31 @@ def calculate_india_landed_duty(hs6_code: str, cif_value: float, scenario: str =
         "total_landed": total_landed,
         "effective_rate_pct": effective_rate_pct,
     }
+
+
+@st.cache_data(ttl=3600)
+def get_eu_ceta_matrix() -> pd.DataFrame:
+    """Returns the top 10 Green-Lane complementary export opportunities
+    under CETA from global_trade.db.
+    """
+    conn = _get_global_conn()
+    df = pd.read_sql("SELECT * FROM eu_ceta_opportunities ORDER BY rank ASC", conn)
+    return df
+
+
+@st.cache_data(ttl=3600)
+def get_eu_headline_metrics() -> dict:
+    """Calculates aggregate metrics for the EU CETA Green-Lane opportunities."""
+    df = get_eu_ceta_matrix()
+    total_eu_demand_cad = df["eu_market_demand_cad"].sum()
+    total_ontario_surplus = df["ontario_surplus_cad"].sum()
+    primary_ag_count = int(df["is_primary_ag"].sum())
+
+    return {
+        "total_commodities": len(df),
+        "total_eu_demand_cad": total_eu_demand_cad,
+        "total_ontario_surplus": total_ontario_surplus,
+        "primary_ag_count": primary_ag_count,
+        "ceta_tariff_pct": 0.0,
+    }
+

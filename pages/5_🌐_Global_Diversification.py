@@ -35,6 +35,8 @@ from lib.data_loader import (
     get_india_cepa_matrix,
     get_india_headline_metrics,
     calculate_india_landed_duty,
+    get_eu_ceta_matrix,
+    get_eu_headline_metrics,
     _get_global_conn,
 )
 from lib.chapter_labels import (
@@ -102,7 +104,7 @@ with col_ctrl3:
 
 st.divider()
 
-# ── 5-Tab Analytical Architecture ────────────────────────────────────
+# ── 6-Tab Analytical Architecture ────────────────────────────────────
 
 tabs = st.tabs([
     "🌍 Market Concentration",
@@ -110,6 +112,7 @@ tabs = st.tabs([
     "🎯 Diversion Opportunity Matrix",
     "📈 Strategic Benchmarks & Non-Tariff Barriers",
     "🇮🇳 India CEPA Frontier",
+    "🇪🇺 EU CETA 'Green-Lane'",
 ])
 
 # =====================================================================
@@ -729,6 +732,196 @@ with tabs[4]:
         label="Download Full India CEPA Opportunity Matrix (CSV)",
         data=csv_india,
         file_name="Ontario_India_CEPA_AgriFood_Opportunities.csv",
+        mime="text/csv",
+    )
+
+
+# =====================================================================
+# TAB 6: 🇪🇺 EU CETA "Green-Lane" Opportunities
+# =====================================================================
+
+with tabs[5]:
+    st.subheader("🇪🇺 EU CETA 'Green-Lane' Export Opportunities")
+    st.markdown(
+        "**Strategic Roadmap for Ontario Primary Agriculture, Floriculture (NAICS 1114), and Value-Added Agri-Food.**\n\n"
+        "Under CETA, 99% of agricultural tariffs are eliminated (0%). Yet Canada faces a **€1.7B structural agri-food deficit** with the EU "
+        "because conventional bulk commodities are trapped by European hazard-based pesticide MRL cut-offs, soil bans, EUDR deforestation mandates, "
+        "and rigid processed food quota bureaucracy. This tab operationalizes the **'Green-Lane' strategy**—targeting commodities with verifiable "
+        "European supply deficits, 0% CETA access, and total structural immunity to non-tariff barriers."
+    )
+
+    # 1. Headline Metrics Scorecard
+    metrics_eu = get_eu_headline_metrics()
+    df_eu = get_eu_ceta_matrix()
+
+    col_eu1, col_eu2, col_eu3, col_eu4 = st.columns(4)
+    col_eu1.metric(
+        "EU Structural Import Demand",
+        f"${metrics_eu['total_eu_demand_cad'] / 1e9:.2f}B CAD",
+        "Eurostat COMEXT Deficits",
+    )
+    col_eu2.metric(
+        "Ontario Export Capacity",
+        f"${metrics_eu['total_ontario_surplus'] / 1e9:.2f}B CAD",
+        "Annual Production Surplus",
+    )
+    col_eu3.metric(
+        "CETA Preferential Tariff",
+        "0.0% Duty-Free",
+        "Full Tariff Elimination",
+    )
+    col_eu4.metric(
+        "Primary Ag Allocation",
+        f"{metrics_eu['primary_ag_count']} of {metrics_eu['total_commodities']} Lines",
+        "Includes NAICS 1114 Floriculture",
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 2. Sector Filter & Interactive Matrix
+    st.markdown("### 📋 Top 10 'Green-Lane' Complementary Commodities")
+
+    col_f1, col_f2 = st.columns([2, 2])
+    with col_f1:
+        sector_filter = st.multiselect(
+            "Filter by Sector Classification",
+            options=sorted(df_eu["sector"].unique().tolist()),
+            default=sorted(df_eu["sector"].unique().tolist()),
+            key="eu_sector_filter",
+        )
+    with col_f2:
+        st.info(
+            "🌿 **Primary Agriculture Mandate**: Nursery, Floriculture, and Greenhouse operators (NAICS 1114 / HS Chapter 06) "
+            "are classified strictly as Primary Agriculture per Ontario's *Farm Registration and Farm Organizations Funding Act, 1993*."
+        )
+
+    df_filtered_eu = df_eu[df_eu["sector"].isin(sector_filter)].copy()
+
+    # Formatted display table
+    df_disp_eu = df_filtered_eu.copy()
+    df_disp_eu["Ontario Surplus (CAD)"] = df_disp_eu["ontario_surplus_cad"].apply(lambda v: f"${v:,.0f}")
+    df_disp_eu["EU Demand (CAD)"] = df_disp_eu["eu_market_demand_cad"].apply(lambda v: f"${v:,.0f}")
+    df_disp_eu["CETA Tariff"] = df_disp_eu["ceta_tariff_pct"].apply(lambda v: f"{v:.1f}%")
+
+    cols_show_eu = [
+        "rank",
+        "hs6_code",
+        "commodity_desc",
+        "sector",
+        "Ontario Surplus (CAD)",
+        "EU Demand (CAD)",
+        "CETA Tariff",
+        "regulatory_clearance_status",
+        "strategic_arbitrage_advantage",
+    ]
+    df_show_eu = df_disp_eu[cols_show_eu].rename(columns={
+        "rank": "Rank",
+        "hs6_code": "HS-6",
+        "commodity_desc": "Commodity Description",
+        "sector": "Sector",
+        "regulatory_clearance_status": "Regulatory Clearance",
+        "strategic_arbitrage_advantage": "Strategic Arbitrage Advantage",
+    })
+    st.dataframe(df_show_eu, use_container_width=True, hide_index=True)
+
+    # 3. Visual Comparison Chart
+    st.markdown("### 📊 Market Opportunity Comparison: EU Demand vs. Ontario Capacity")
+    fig_eu_bar = go.Figure()
+    fig_eu_bar.add_trace(go.Bar(
+        y=df_filtered_eu["commodity_desc"],
+        x=df_filtered_eu["eu_market_demand_cad"] / 1e6,
+        name="EU Market Demand ($M CAD)",
+        orientation="h",
+        marker=dict(color="#003366"),
+    ))
+    fig_eu_bar.add_trace(go.Bar(
+        y=df_filtered_eu["commodity_desc"],
+        x=df_filtered_eu["ontario_surplus_cad"] / 1e6,
+        name="Ontario Export Surplus ($M CAD)",
+        orientation="h",
+        marker=dict(color="#2ca02c"),
+    ))
+    fig_eu_bar.update_layout(
+        barmode="group",
+        height=520,
+        margin=dict(l=10, r=10, t=20, b=10),
+        xaxis_title="Trade Value ($M CAD)",
+        yaxis=dict(autorange="reversed"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    st.plotly_chart(fig_eu_bar, use_container_width=True)
+
+    # 4. Strategic Deep Dives: Overcoming Non-Tariff Barriers
+    st.markdown("### 🛡️ Strategic Non-Tariff Protocols & Market Clearance Pathways")
+    st.markdown(
+        "Achieving export success in Europe requires precise alignment with European Green Deal directives and SPS laws. "
+        "Below are the four core regulatory mechanisms governing the EU CETA corridor."
+    )
+
+    col_nt1, col_nt2 = st.columns(2)
+
+    with col_nt1:
+        with st.expander("📦 1. The Annex 5-A Origin Quota Trap (0.00% Fill Rate)", expanded=True):
+            st.markdown(
+                "**The Mechanism:** CETA Annex 5-A provides Alternative Rules of Origin (Origin Quotas) permitting Canadian "
+                "processed foods to enter duty-free even when made with non-originating dairy or sugar (e.g. 60,000 MT pet food, "
+                "35,000 MT bakery/processed foods, 10,000 MT confectionery).\n\n"
+                "**The Market Failure:** Utilization rates have sat persistently at **0.00%** across multiple years. "
+                "Global Affairs Canada placed these lines on the Export Control List (ECL) under the *Export and Import Permits Act* (EIPA), "
+                "requiring shipment-specific permits. High administrative costs, first-come first-served risk at EU ports, and rigid "
+                "allocation rules completely choke commercial utilization.\n\n"
+                "**Strategic Solution:** Ontario food processors must formulate high-value specialty products with **100% originating Canadian "
+                "ingredients** (organic soy, oats, maple) to enter directly duty-free under standard CETA rules, bypassing Annex 5-A entirely."
+            )
+
+        with col_nt2:
+            with st.expander("⚠️ 2. Pesticide MRL Hazard Cliff vs. Zero-MRL Green Lane", expanded=True):
+                st.markdown(
+                    "**The Hazard Cut-Off:** Under Regulation (EC) 1107/2009 and 396/2005, the EU automatically slashes import MRLs "
+                    "to the **default Limit of Quantification (LOQ) of 0.01 mg/kg** when active substances lose EU approval. "
+                    "The European Commission's Joint Research Centre (JRC) calculated that third-country import volumes will decline by "
+                    "**41%** under this rule.\n\n"
+                    "**Threatened Ontario Crops:** Conventional pulses and field crops using **mancozeb**, **lambda-cyhalothrin**, and "
+                    "**neonicotinoid seed treatments** face catastrophic border rejection and cargo destruction at Rotterdam.\n\n"
+                    "**The Green-Lane Immunity:** Exporters must target **'Zero-MRL' commodities**: (1) Certified Organic under CEORA "
+                    "(prohibiting synthetics), (2) highly fractionated protein isolates and distilled spirits, and (3) Controlled Environment Agriculture."
+                )
+
+    col_nt3, col_nt4 = st.columns(2)
+
+    with col_nt3:
+        with st.expander("🌸 3. Primary Floriculture: In Vitro Agar Micropropagation (NAICS 1114)", expanded=True):
+            st.markdown(
+                "**The Soil Prohibition:** Regulation (EU) 2016/2031 (*Plant Health Law*, Annex VI) strictly bans the importation of soil "
+                "and organic growing media from non-EU third countries. This completely excludes traditional potted plants and root balls.\n\n"
+                "**The High-Tech Breakthrough:** Ontario's Niagara and Waterloo greenhouse clusters have pioneered **sterile in vitro tissue "
+                "culture plantlets** in sealed transparent agar flasks (**HS 0602.90**). Synthetic agar contains zero soil and hermetic sealing "
+                "guarantees freedom from Regulated Non-Quarantine Pests (RNQPs), completely bypassing soil bans and border delays.\n\n"
+                "**Secondary Pathway:** Dormant unrooted vegetative cuttings (**HS 0602.10**) free of soil can also enter legally under "
+                "CFIA phytosanitary certificates, supplying European commercial greenhouse growers with elite genetics."
+            )
+
+    with col_nt4:
+        with st.expander("🛰️ 4. EUDR Compliance: Ontario CIPRS Traceability Advantage", expanded=True):
+            st.markdown(
+                "**The Regulation:** The EU Deforestation Regulation (EUDR Reg 2023/1115) mandates strict plot-level geolocation (WGS-84 "
+                "closed polygons for plots >4 ha) in TRACES NT to prove soy was not grown on deforested land after Dec 31, 2020.\n\n"
+                "**Why Competitors Stumble:** Bulk soy supply chains in Brazil and the United States rely on co-mingling at elevators and crushers, "
+                "making plot-level segregation prohibitively expensive.\n\n"
+                "**Ontario's Pre-Existing Advantage:** Ontario's Identity-Preserved (IP) food soy sector operates under the Canadian Grain "
+                "Commission's **Canadian Identity Preserved Recognition System (CIPRS)**. CIPRS guarantees audited varietal purity and origin "
+                "from certified seed to export container, providing turnkey EUDR compliance and securing premium European food contracts."
+            )
+
+    st.divider()
+
+    # 5. Download Section
+    st.markdown("### 📥 Export Opportunity Matrix")
+    csv_eu = df_eu.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Full EU CETA 'Green-Lane' Opportunity Matrix (CSV)",
+        data=csv_eu,
+        file_name="Ontario_EU_CETA_Green_Lane_Opportunities.csv",
         mime="text/csv",
     )
 
