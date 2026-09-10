@@ -788,3 +788,118 @@ def get_diversion_matrix(year: str = "2025") -> pd.DataFrame:
 
     return result
 
+
+@st.cache_data(ttl=3600)
+def get_india_cepa_matrix() -> pd.DataFrame:
+    """Returns the strategic opportunity matrix for the Canada-India CEPA negotiations."""
+    conn = _get_global_conn()
+    df = pd.read_sql("SELECT * FROM india_cepa_opportunities ORDER BY ontario_surplus_cad DESC", conn)
+    return df
+
+
+@st.cache_data(ttl=3600)
+def get_india_headline_metrics() -> dict:
+    """Calculates aggregate metrics for the India CEPA opportunity."""
+    df = get_india_cepa_matrix()
+    total_india_import_cad = df["india_world_import_cad"].sum()
+    total_ontario_surplus = df["ontario_surplus_cad"].sum()
+    avg_mfn_duty = df["effective_mfn_duty_pct"].mean()
+    fssai_crops_count = int(df["fssai_non_gm_mandate"].sum())
+
+    return {
+        "total_commodities": len(df),
+        "total_india_import_cad": total_india_import_cad,
+        "total_ontario_surplus": total_ontario_surplus,
+        "avg_mfn_duty": avg_mfn_duty,
+        "fssai_crops_count": fssai_crops_count,
+    }
+
+
+def calculate_india_landed_duty(hs6_code: str, cif_value: float, scenario: str = "Applied MFN") -> dict:
+    """Calculates landed duty for a specific HS-6 commodity under three scenarios:
+    1. 'Applied MFN' (Current statutory BCD + AIDC + SWS + IGST)
+    2. 'AI-ECTA Benchmark' (Australia ECTA parity rate)
+    3. 'Proposed CEPA Target' (Canada's requested negotiating target)
+    """
+    df = get_india_cepa_matrix()
+    row = df[df["hs6_code"] == hs6_code]
+    if row.empty:
+        return {}
+
+    r = row.iloc[0]
+    bcd = float(r["mfn_bcd_pct"])
+    aidc = float(r["aidc_pct"])
+    sws = float(r["sws_pct"])
+    igst = float(r["igst_pct"])
+
+    if scenario == "AI-ECTA Benchmark":
+        if hs6_code in ["071333", "071339"]:
+            bcd = 5.0
+            sws = 0.5
+        elif hs6_code == "220830":
+            bcd = 50.0
+            aidc = 50.0
+            sws = 5.0
+        elif hs6_code == "843621":
+            bcd = 0.0
+            sws = 0.0
+        elif hs6_code == "060210":
+            bcd = 0.0
+            sws = 0.0
+        else:
+            bcd = bcd * 0.5
+            sws = bcd * 0.10
+
+    elif scenario == "Proposed CEPA Target":
+        if hs6_code in ["120190", "051110", "843621", "060210", "121120", "170220"]:
+            bcd = 0.0
+            aidc = 0.0
+            sws = 0.0
+        elif hs6_code in ["071333", "071339", "100199"]:
+            bcd = 5.0
+            aidc = 0.0
+            sws = 0.5
+        elif hs6_code == "220830":
+            bcd = 25.0
+            aidc = 25.0
+            sws = 2.5
+        elif hs6_code == "100590":
+            bcd = 15.0
+            aidc = 0.0
+            sws = 1.5
+        elif hs6_code == "151411":
+            bcd = 10.0
+            aidc = 0.0
+            sws = 1.0
+        else:
+            bcd = 5.0
+            sws = 0.5
+
+    bcd_amt = cif_value * (bcd / 100.0)
+    aidc_amt = cif_value * (aidc / 100.0)
+    sws_amt = bcd_amt * (10.0 / 100.0) if bcd > 0 else 0.0
+    pre_igst_total = bcd_amt + aidc_amt + sws_amt
+
+    assessable_igst = cif_value + pre_igst_total
+    igst_amt = assessable_igst * (igst / 100.0)
+    total_duty = pre_igst_total + igst_amt
+    total_landed = cif_value + total_duty
+    effective_rate_pct = (total_duty / cif_value * 100.0) if cif_value > 0 else 0.0
+
+    return {
+        "hs6_code": hs6_code,
+        "commodity_desc": r["commodity_desc"],
+        "scenario": scenario,
+        "cif_value": cif_value,
+        "bcd_pct": bcd,
+        "bcd_amt": bcd_amt,
+        "aidc_pct": aidc,
+        "aidc_amt": aidc_amt,
+        "sws_pct": sws,
+        "sws_amt": sws_amt,
+        "igst_pct": igst,
+        "igst_amt": igst_amt,
+        "total_duty": total_duty,
+        "total_landed": total_landed,
+        "effective_rate_pct": effective_rate_pct,
+    }
