@@ -402,10 +402,13 @@ with tabs[2]:
             "Immediate Pivot (Commodity)": "#388E3C",           # Light Green
         }
 
+        # Clip to $1,000 for safe log-scale visualization without mathematical singularity
+        df_div_plot["non_us_plot"] = df_div_plot["non_us_exports"].clip(lower=1000.0)
+
         fig_scatter = px.scatter(
             df_div_plot,
             x="us_concentration_pct",
-            y="non_us_exports",
+            y="non_us_plot",
             size="total_exports",
             color="diversion_tier",
             color_discrete_map=tier_colors,
@@ -417,10 +420,11 @@ with tabs[2]:
                 "us_concentration_pct": ":.1f",
                 "active_markets": True,
                 "total_exports": False,
+                "non_us_plot": False,
             },
             labels={
                 "us_concentration_pct": "U.S. Export Concentration (%)",
-                "non_us_exports": "Non-U.S. Established Trade (CAD)",
+                "non_us_plot": "Non-U.S. Established Trade (CAD)",
                 "diversion_tier": "Diversion Feasibility Tier",
                 "hs6_clean": "HS-6 Code",
                 "active_markets": "Active Global Buyers",

@@ -742,31 +742,48 @@ def get_diversion_matrix(year: str = "2025") -> pd.DataFrame:
     # 2. US exports by HS-6
     df_us = pd.read_sql(
         """
-        SELECT hs6_clean, sum(value_cad) as us_exports
+        SELECT hs6_clean, hs2_chapter, commodity_desc, sum(value_cad) as us_exports
         FROM state_hs_trade
         WHERE trade_type = 'Domestic exports' AND ref_date LIKE ?
-        GROUP BY hs6_clean
+        GROUP BY hs6_clean, hs2_chapter, commodity_desc
         """,
         conn_us,
         params=[f"{year}%"],
     )
 
-    # 3. Merge US and non-US
-    merged = pd.merge(df_us, df_non_us, on="hs6_clean", how="outer").fillna(0.0)
+    # 3. Merge US and non-US on hs6_clean
+    merged = pd.merge(df_us, df_non_us, on=["hs6_clean"], how="outer", suffixes=("_us", "_gl")).fillna(0.0)
+    merged["us_exports"] = pd.to_numeric(merged["us_exports"], errors="coerce").fillna(0.0)
+    merged["non_us_exports"] = pd.to_numeric(merged["non_us_exports"], errors="coerce").fillna(0.0)
     merged["total_exports"] = merged["us_exports"] + merged["non_us_exports"]
     merged["us_concentration_pct"] = (
         merged["us_exports"] / merged["total_exports"] * 100.0
     ).where(merged["total_exports"] > 0, 0.0)
 
+    # Consolidate description and chapter
+    merged["commodity_desc"] = merged["commodity_desc_us"].where(
+        (merged["commodity_desc_us"] != 0.0) & (merged["commodity_desc_us"] != ""),
+        merged["commodity_desc_gl"]
+    )
+    merged["hs2_chapter"] = merged["hs2_chapter_us"].where(
+        (merged["hs2_chapter_us"] != 0.0) & (merged["hs2_chapter_us"] != ""),
+        merged["hs2_chapter_gl"]
+    )
+    merged = merged.drop(columns=["commodity_desc_us", "commodity_desc_gl", "hs2_chapter_us", "hs2_chapter_gl"])
+
     # 4. Join preferential tariffs benchmarks
     df_tariffs = pd.read_sql("SELECT * FROM preferential_tariffs", conn_gl)
-    result = pd.merge(merged, df_tariffs, on="hs6_clean", how="left")
+    df_tariffs_sub = df_tariffs.drop(columns=["commodity_desc", "hs2_chapter"], errors="ignore")
+    result = pd.merge(merged, df_tariffs_sub, on="hs6_clean", how="left")
 
-    # 5. Join Section 338 status
+    # 5. Join Section 338 status (cleanly cast hs6_clean to string on both sides)
     df_s338 = pd.read_sql(
-        "SELECT DISTINCT hs6_code as hs6_clean, proclamation, commodity_group FROM us_section338_tariffs",
+        "SELECT DISTINCT substr(replace(htsus_8digit, '.', ''), 1, 6) as hs6_clean, proclamation, commodity_group FROM us_section338_tariffs",
         conn_us,
     )
+    df_s338["hs6_clean"] = df_s338["hs6_clean"].astype(str)
+    result["hs6_clean"] = result["hs6_clean"].astype(str)
+    df_s338 = df_s338.drop_duplicates(subset=["hs6_clean"])
     result = pd.merge(result, df_s338, on="hs6_clean", how="left")
 
     return result
