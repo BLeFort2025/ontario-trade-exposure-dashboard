@@ -34,12 +34,12 @@ with tab1:
     # Official Remission Regulatory Banner
     st.info(
         """
-        ℹ️ **Federal Remission Framework (*United States Surtax Remission Order*):**  
-        Pursuant to Sections 3 and 5 of the Remission Order and **CBSA Customs Notice 25-19 (Paragraph 41)**, 
-        goods imported for **Primary Agriculture (NAICS 11)** and **Food & Beverage Manufacturing (NAICS 31-33)** 
-        are granted **automatic point-of-import remission** using Special Authorization Code **`25-0466C`**.  
-        * **Field Machinery & Parts:** Direct agricultural machinery parts (`HS 8433.90` combine parts, `HS 8433.20` mower bars) enter duty-free.  
-        * **Transportation & Storage Exclusion:** Goods used for hauling and storage (such as farm/livestock trailers under `HS 8716.39`) remain subject to the **25% active surtax**.
+        ℹ️ **Federal Remission & Counter-Tariff Framework (CBSA Customs Notice 26-23, Effective Sept 8, 2026):**  
+        Following Order in Council P.C. 2026-0785, Canada matches U.S. tariffs dollar-for-dollar across 3 statutory surtax tiers entered in **Field 85 (Surtax Code)** of the Commercial Accounting Declaration (CAD):
+        * **CARM Code `26186A` (15% Surtax):** Schedule 1 goods (headline rate for combine parts and industrial machinery).
+        * **CARM Code `26186B` (25% Surtax):** Schedule 2 goods (including farm and livestock trailers under `HS 8716.39`).
+        * **CARM Code `26186C` (50% Surtax):** Schedule 3 goods (targeted consumer ag/food: dairy `HS 0402/0404`, honey `0409`, bakery mixes `1901.20`).
+        * **Special Authorization Remission Code `25-0466C` (0% Net Duty):** Pursuant to Section 3 of the Remission Order, farm equipment dealers and farmers importing combine parts (`HS 8433.90`) and mower bars (`HS 8433.20`) for agricultural production pay **0% net duty at time of accounting**.
         """
     )
     
@@ -217,8 +217,19 @@ with tab1:
 
 
 with tab2:
-    st.header("U.S. Section 338 Tariffs (Ontario Exports)")
-    st.caption("Overlay of proposed or enacted U.S. retaliatory tariffs against Ontario export flows:")
+    st.header("U.S. Section 338 Tariffs & Import Bans (Ontario Exports)")
+    st.caption("Overlay of enacted U.S. Section 338 tariffs and upcoming September 29 import bans on Ontario exports:")
+    
+    st.error(
+        """
+        🚨 **Upcoming September 29, 2026 U.S. Import Bans (Section 338 Escalation):**  
+        Under Presidential Proclamations 11046, 11047, and 11048, the U.S. is transitioning 50% surtaxes into **outright import bans** for:
+        * **Alcoholic Beverages (`$794M` CAD exposed):** Canadian whisky, liqueurs, gin, wine, cider, and beer (Proc. 11046).
+        * **Dairy, Whey & Mixes (`$530M` CAD exposed):** Dairy mixes, cheese, yogurt, butter, skim milk powder, whey (Proc. 11047).
+        * **Floriculture & Honey (`$438M` CAD exposed):** Live ornamental plants, bulbs, foliage, honey (Proc. 11048 — classified as **Primary Agriculture**).  
+        👉 **Alternative Diversification Pathways:** Explore CETA (EU) and CPTPP (Japan) export corridors on the new **[🌐 Global Market Diversification](pages/5_🌐_Global_Diversification.py)** page!
+        """
+    )
     
     try:
         exports_df = get_tariff_matched_exports(year=selected_year)

@@ -589,3 +589,185 @@ def calculate_substitution_impact(displacement_dollars: float, sector: str = "fo
         "farm_gate_revenue": farm_gate_revenue,
     }
 
+
+# ── Global Market Diversification Queries (Track 4) ─────────────────
+
+GLOBAL_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "global_trade.db"
+
+
+def _get_global_conn() -> sqlite3.Connection:
+    """Return a SQLite connection to global_trade.db."""
+    return sqlite3.connect(str(GLOBAL_DB_PATH), check_same_thread=False)
+
+
+@st.cache_data(ttl=3600)
+def get_global_market_summary(year: str, trade_type: str = "Domestic exports") -> pd.DataFrame:
+    """Global country-level trade summary for Ontario, combining non-US and US trade.
+
+    Returns a DataFrame with columns: country, country_iso3, trade_agreement, value_cad, share_pct
+    sorted by value_cad descending.
+    """
+    conn_gl = _get_global_conn()
+    conn_us = _get_conn()
+
+    # 1. Non-US trade from global_hs_trade
+    df_non_us = pd.read_sql(
+        """
+        SELECT country, country_iso3, trade_agreement, sum(value_cad) as value_cad
+        FROM global_hs_trade
+        WHERE trade_type = ? AND ref_date LIKE ?
+          AND hs2_chapter BETWEEN '01' AND '24'
+        GROUP BY country, country_iso3, trade_agreement
+        """,
+        conn_gl,
+        params=[trade_type, f"{year}%"],
+    )
+
+    # 2. US total trade from state_hs_trade
+    df_us = pd.read_sql(
+        """
+        SELECT sum(value_cad) as value_cad
+        FROM state_hs_trade
+        WHERE trade_type = ? AND ref_date LIKE ?
+          AND hs2_chapter BETWEEN '01' AND '24'
+        """,
+        conn_us,
+        params=[trade_type, f"{year}%"],
+    )
+    us_val = df_us["value_cad"].iloc[0] if len(df_us) > 0 and pd.notna(df_us["value_cad"].iloc[0]) else 0.0
+
+    us_row = pd.DataFrame([{
+        "country": "United States",
+        "country_iso3": "USA",
+        "trade_agreement": "CUSMA",
+        "value_cad": us_val,
+    }])
+
+    combined = pd.concat([us_row, df_non_us], ignore_index=True)
+    combined = combined[combined["value_cad"] > 0].sort_values("value_cad", ascending=False).reset_index(drop=True)
+
+    total_val = combined["value_cad"].sum()
+    combined["share_pct"] = (combined["value_cad"] / total_val * 100.0) if total_val > 0 else 0.0
+    combined["rank"] = combined.index + 1
+
+    return combined
+
+
+@st.cache_data(ttl=3600)
+def get_global_agreement_summary(year: str, trade_type: str = "Domestic exports") -> pd.DataFrame:
+    """Aggregates Ontario trade by trade agreement corridor (CUSMA, CETA, CPTPP, etc.)."""
+    df = get_global_market_summary(year, trade_type)
+    summary = df.groupby("trade_agreement", as_index=False)["value_cad"].sum()
+    total_val = summary["value_cad"].sum()
+    summary["share_pct"] = (summary["value_cad"] / total_val * 100.0) if total_val > 0 else 0.0
+    return summary.sort_values("value_cad", ascending=False).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def get_global_chapter_trade(year: str, chapter: str = None, trade_type: str = "Domestic exports") -> pd.DataFrame:
+    """Returns country breakdown for a specific HS chapter or all chapters."""
+    conn_gl = _get_global_conn()
+    conn_us = _get_conn()
+
+    ch_filter_gl = "AND hs2_chapter = ?" if chapter else "AND hs2_chapter BETWEEN '01' AND '24'"
+    ch_filter_us = "AND hs2_chapter = ?" if chapter else "AND hs2_chapter BETWEEN '01' AND '24'"
+    params_gl = [trade_type, f"{year}%", chapter] if chapter else [trade_type, f"{year}%"]
+    params_us = [trade_type, f"{year}%", chapter] if chapter else [trade_type, f"{year}%"]
+
+    df_non_us = pd.read_sql(
+        f"""
+        SELECT country, country_iso3, trade_agreement, hs2_chapter, sum(value_cad) as value_cad
+        FROM global_hs_trade
+        WHERE trade_type = ? AND ref_date LIKE ? {ch_filter_gl}
+        GROUP BY country, country_iso3, trade_agreement, hs2_chapter
+        """,
+        conn_gl,
+        params=params_gl,
+    )
+
+    df_us = pd.read_sql(
+        f"""
+        SELECT sum(value_cad) as value_cad
+        FROM state_hs_trade
+        WHERE trade_type = ? AND ref_date LIKE ? {ch_filter_us}
+        """,
+        conn_us,
+        params=params_us,
+    )
+    us_val = df_us["value_cad"].iloc[0] if len(df_us) > 0 and pd.notna(df_us["value_cad"].iloc[0]) else 0.0
+
+    us_row = pd.DataFrame([{
+        "country": "United States",
+        "country_iso3": "USA",
+        "trade_agreement": "CUSMA",
+        "hs2_chapter": chapter if chapter else "All",
+        "value_cad": us_val,
+    }])
+
+    combined = pd.concat([us_row, df_non_us], ignore_index=True)
+    return combined.sort_values("value_cad", ascending=False).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def get_preferential_tariffs() -> pd.DataFrame:
+    """Return the strategic tariff and non-tariff barrier benchmark table."""
+    conn = _get_global_conn()
+    return pd.read_sql("SELECT * FROM preferential_tariffs ORDER BY hs6_code", conn)
+
+
+@st.cache_data(ttl=3600)
+def get_diversion_matrix(year: str = "2025") -> pd.DataFrame:
+    """Cross-references Ontario exports facing U.S. tariffs with non-U.S. destinations.
+
+    Identifies diversion candidate commodities, applied preferential tariff rates,
+    and 1-year redirection potential based on empirical Armington elasticities.
+    """
+    conn_gl = _get_global_conn()
+    conn_us = _get_conn()
+
+    # 1. Non-US export totals by HS-6
+    df_non_us = pd.read_sql(
+        """
+        SELECT hs6_clean, hs2_chapter, commodity_desc,
+               sum(value_cad) as non_us_exports,
+               group_concat(DISTINCT country) as active_markets
+        FROM global_hs_trade
+        WHERE trade_type = 'Domestic exports' AND ref_date LIKE ?
+        GROUP BY hs6_clean, hs2_chapter, commodity_desc
+        """,
+        conn_gl,
+        params=[f"{year}%"],
+    )
+
+    # 2. US exports by HS-6
+    df_us = pd.read_sql(
+        """
+        SELECT hs6_clean, sum(value_cad) as us_exports
+        FROM state_hs_trade
+        WHERE trade_type = 'Domestic exports' AND ref_date LIKE ?
+        GROUP BY hs6_clean
+        """,
+        conn_us,
+        params=[f"{year}%"],
+    )
+
+    # 3. Merge US and non-US
+    merged = pd.merge(df_us, df_non_us, on="hs6_clean", how="outer").fillna(0.0)
+    merged["total_exports"] = merged["us_exports"] + merged["non_us_exports"]
+    merged["us_concentration_pct"] = (
+        merged["us_exports"] / merged["total_exports"] * 100.0
+    ).where(merged["total_exports"] > 0, 0.0)
+
+    # 4. Join preferential tariffs benchmarks
+    df_tariffs = pd.read_sql("SELECT * FROM preferential_tariffs", conn_gl)
+    result = pd.merge(merged, df_tariffs, on="hs6_clean", how="left")
+
+    # 5. Join Section 338 status
+    df_s338 = pd.read_sql(
+        "SELECT DISTINCT hs6_code as hs6_clean, proclamation, commodity_group FROM us_section338_tariffs",
+        conn_us,
+    )
+    result = pd.merge(result, df_s338, on="hs6_clean", how="left")
+
+    return result
+

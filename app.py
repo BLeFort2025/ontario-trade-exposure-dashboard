@@ -148,12 +148,16 @@ st.sidebar.markdown(
     """
     **📌 Methodology & Scope**
     - **Geographic Scope**: **Ontario ↔ U.S. 50 States + D.C.**
-      *(Captures ~80% of Ontario's total global exports. Ontario's total agri-food exports to the **World** is ~$28B–$30B CAD).*
+      *(Captures ~81% of Ontario's total global exports. Ontario's total agri-food exports to the **World** is ~$29B CAD).*
     - **Currency**: Canadian Dollars (CAD)
     - **HS Chapter 06**: Classified as *Primary Agriculture* per OFA convention
     - **HS Chapter 87**: Ag vehicles/trailers (8701/8716) separated from automotive
     - **Agri-Food Derivatives**: Ingests HS 35 (protein/starches), HS 33 (flavorings), HS 41 (hides), and HS 29/38 (sorbitol)
     """
+)
+st.sidebar.info(
+    "🌐 **New Feature — Track 4:** Explore Ontario's trade with 50+ non-U.S. countries under CUSMA, CETA, and CPTPP "
+    "on the **[Global Diversification](pages/5_🌐_Global_Diversification.py)** page!"
 )
 
 # ── 3. Main Header ───────────────────────────────────────────────────
