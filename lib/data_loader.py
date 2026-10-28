@@ -352,6 +352,13 @@ def get_us_section338_tariffs() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
+def get_us_section338_oct23_reshuffle() -> pd.DataFrame:
+    """Load the October 23, 2026 Section 338 tariff reshuffle (22 removed + 100 added lines)."""
+    conn = _get_conn()
+    return pd.read_sql("SELECT * FROM us_section338_oct23_reshuffle", conn)
+
+
+@st.cache_data(ttl=3600)
 def get_tariff_matched_imports(year: str) -> pd.DataFrame:
     """Join Ontario imports against Canada's counter-tariff schedule.
 
@@ -425,18 +432,28 @@ def get_tariff_matched_exports(year: str) -> pd.DataFrame:
     query = """
         SELECT t.hs6_code, t.commodity_desc, t.hs2_chapter, t.state,
                sum(t.value_cad) as value_cad,
-               s.commodity_group, s.description as tariff_desc,
-               s.midpoint_fraction
+               s.proclamation, s.commodity_group, s.description as tariff_desc,
+               s.midpoint_fraction, s.measure_status
         FROM state_hs_trade t
-        LEFT JOIN us_section338_tariffs s
-            ON t.hs6_code = s.hs6_code
+        LEFT JOIN (
+            SELECT hs6_code,
+                   min(proclamation) as proclamation,
+                   min(commodity_group) as commodity_group,
+                   min(description) as description,
+                   max(midpoint_fraction) as midpoint_fraction,
+                   min(measure_status) as measure_status
+            FROM us_section338_tariffs
+            GROUP BY hs6_code
+        ) s ON t.hs6_code = s.hs6_code
         WHERE t.trade_type = 'Domestic exports'
           AND substr(t.ref_date, 1, 4) = ?
         GROUP BY t.hs6_code, t.commodity_desc, t.hs2_chapter, t.state,
-                 s.commodity_group, s.description, s.midpoint_fraction
+                 s.proclamation, s.commodity_group, s.description,
+                 s.midpoint_fraction, s.measure_status
     """
     df = pd.read_sql(query, conn, params=[year])
     df["has_tariff"] = df["midpoint_fraction"].notna()
+    df["exposed_value_cad"] = df["value_cad"] * df["midpoint_fraction"].fillna(0.0)
     return df
 
 
