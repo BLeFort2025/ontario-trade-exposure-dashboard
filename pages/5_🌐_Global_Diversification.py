@@ -69,7 +69,7 @@ st.info(
     "structural divergence. **Primary Agriculture (NAPCS C11)**—strictly including NAICS 1114 greenhouse and nursery "
     "growers—is already **~35% diversified** into non-U.S. global corridors ($3.44B to Japan, EU, Mexico, and Asia). "
     "Conversely, **Processed Food & Beverages (HS 16–22)** exceed **90% dependency on the U.S.** market, leaving them "
-    "critically exposed to U.S. Section 338 import bans effective September 29, 2026."
+    "critically exposed to U.S. Section 338 import bans (Sept 29) and 50% tariffs (modified Sept 15 & Oct 30, 2026)."
 )
 
 # ── Controls Row ─────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ with tabs[0]:
         "and track international market penetration across 50+ countries."
     )
 
-    df_market = get_global_market_summary(year, trade_type)
+    df_market = get_global_market_summary(year, trade_type, chapter=selected_ch)
 
     if not df_market.empty:
         total_trade = df_market["value_cad"].sum()
@@ -286,7 +286,7 @@ with tabs[1]:
         "**CUSMA (Mexico)**, **CETA (European Union)**, **CPTPP (Trans-Pacific & Japan)**, and **CUKTA (United Kingdom)**."
     )
 
-    df_agreements = get_global_agreement_summary(year, trade_type)
+    df_agreements = get_global_agreement_summary(year, trade_type, chapter=selected_ch)
 
     col_ag1, col_ag2 = st.columns([1, 2])
 
@@ -393,9 +393,13 @@ with tabs[2]:
 
     # Section 338 Callout Box
     st.error(
-        "🚨 **September 29, 2026 U.S. Import Bans (Section 338):** Presidential Proclamations 11046, 11047, and 11048 "
-        "ban the importation of Canadian **Alcoholic Beverages ($794M)**, **Dairy, Whey & Mixes ($530M)**, and "
-        "**Floriculture & Honey ($438M — Primary Ag)**. Below is the empirical diversion feasibility model."
+        "🚨 **U.S. Section 338 Escalations (Sept 29 Import Bans & Oct 30 Tariff Reshuffle):** "
+        "Under Proclamations 11061–11062 (effective Sept 29, 2026), the U.S. imposed **outright import bans** on retail Canadian "
+        "**Alcoholic Beverages <=4L ($794M)** and **Whey & Molasses** (while exempting bulk whisky/spirits >4L under Proc. 11064). "
+        "Meanwhile, **Primary Floriculture & Nursery (HS 0601–0604, NAICS 1114)** and **Honey (0409)** ($438M), **Cheeses (0406, $117.5M)**, "
+        "**Modified Fats/Oils (1518.00.40, $217.4M)**, **Raw Bovine Hides (4101, $28.4M)**, and **Sweetened Cocoa Powder (1806.10, added Oct 30)** "
+        "face a **50% Section 338 tariff** (while **$518.3M** in Ontario egg/fruit grading and food packaging machinery `8433.60`/`8422`/`8419`/`8418` "
+        "was relieved of the 50% duty effective Oct 30, 2026)."
     )
 
     df_diversion = get_diversion_matrix(year)

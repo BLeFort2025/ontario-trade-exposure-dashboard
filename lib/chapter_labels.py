@@ -122,7 +122,7 @@ AGRI_FOOD_CHAPTERS = {
     "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
     "21", "22", "23", "24",
     # Agricultural Derivatives
-    "29-AG", "33-AG", "35", "41",
+    "29-AG", "33-AG", "35", "38-AG", "41",
 }
 
 # Agricultural derivatives outside chapters 01-24
@@ -207,6 +207,7 @@ HIGH_FEASIBILITY_CHAPTERS = {
     "29-AG",  # Bio-sweeteners (Sorbitol)
     "33-AG",  # Essential oils & food/beverage flavorings
     "35",  # Protein derivatives (casein, whey, gelatin, starches)
+    "38-AG",  # Bio-based fatty acids & sorbitol
     "41",  # Raw hides & skins
 }
 

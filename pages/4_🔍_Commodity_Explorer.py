@@ -3,7 +3,14 @@ import pandas as pd
 import plotly.express as px
 from io import BytesIO
 
-from lib.data_loader import get_commodity_search, get_time_series, get_hs6_detail, get_canada_counter_tariffs
+from lib.data_loader import (
+    get_commodity_search,
+    get_time_series,
+    get_hs6_detail,
+    get_canada_counter_tariffs,
+    get_us_section338_tariffs,
+    get_us_section338_oct23_reshuffle,
+)
 from lib.chapter_labels import chapter_label
 from lib.geo_utils import get_valid_state_names
 
@@ -29,10 +36,10 @@ def main():
             st.rerun()
 
     with col2:
-        selected_year = st.session_state.get('selected_year', '2024')
+        selected_year = st.session_state.get('selected_year', '2025')
         year_options = [str(y) for y in range(2021, 2027)]
         if selected_year not in year_options:
-            selected_year = '2024'
+            selected_year = '2025'
         year = st.selectbox("Select Year", options=year_options, index=year_options.index(selected_year))
         st.session_state['selected_year'] = year
 
@@ -43,7 +50,7 @@ def main():
         
         with st.spinner("Searching commodities..."):
             # Call data loader
-            results_df = get_commodity_search(search_term, int(year))
+            results_df = get_commodity_search(search_term, str(year))
             
         if results_df.empty:
             st.warning(f"No commodities found matching '{search_term}' in {year}.")
@@ -61,14 +68,12 @@ def main():
                 fill_value=0
             ).reset_index()
             
-            # Ensure Export and Import columns exist
-            if 'Export' not in pivot_df.columns:
-                pivot_df['Export'] = 0
-            if 'Import' not in pivot_df.columns:
-                pivot_df['Import'] = 0
-                
-            pivot_df['Export Value'] = pivot_df['Export']
-            pivot_df['Import Value'] = pivot_df['Import']
+            # Map StatCan trade_type columns ('Domestic exports' / 'Imports') cleanly
+            exp_col = 'Domestic exports' if 'Domestic exports' in pivot_df.columns else ('Export' if 'Export' in pivot_df.columns else None)
+            imp_col = 'Imports' if 'Imports' in pivot_df.columns else ('Import' if 'Import' in pivot_df.columns else None)
+            
+            pivot_df['Export Value'] = pivot_df[exp_col] if exp_col else 0.0
+            pivot_df['Import Value'] = pivot_df[imp_col] if imp_col else 0.0
             pivot_df['Net Balance'] = pivot_df['Export Value'] - pivot_df['Import Value']
             pivot_df['Total Volume'] = pivot_df['Export Value'] + pivot_df['Import Value']
             
@@ -128,7 +133,7 @@ def main():
                             
                     with col_st:
                         st.markdown(f"**State Breakdown ({year})**")
-                        detail_df = get_hs6_detail(int(year), state=None)
+                        detail_df = get_hs6_detail(str(year), state=None)
                         if not detail_df.empty:
                             state_df = detail_df[detail_df['hs6_code'] == selected_code]
                             if not state_df.empty:
@@ -141,10 +146,10 @@ def main():
                                     fill_value=0
                                 ).reset_index()
                                 
-                                if 'Export' not in state_pivot.columns:
-                                    state_pivot['Export'] = 0
-                                if 'Import' not in state_pivot.columns:
-                                    state_pivot['Import'] = 0
+                                s_exp_col = 'Domestic exports' if 'Domestic exports' in state_pivot.columns else ('Export' if 'Export' in state_pivot.columns else None)
+                                s_imp_col = 'Imports' if 'Imports' in state_pivot.columns else ('Import' if 'Import' in state_pivot.columns else None)
+                                state_pivot['Export'] = state_pivot[s_exp_col] if s_exp_col else 0.0
+                                state_pivot['Import'] = state_pivot[s_imp_col] if s_imp_col else 0.0
                                     
                                 state_pivot['Total'] = state_pivot['Export'] + state_pivot['Import']
                                 state_pivot = state_pivot.sort_values(by='Total', ascending=False).head(10)
@@ -164,12 +169,25 @@ def main():
                         else:
                             st.info("No state breakdown data available.")
                             
-                    st.markdown("**Tariff Status**")
+                    st.markdown("**Cross-Border Tariff & Remission Status**")
                     tariffs_df = get_canada_counter_tariffs()
-                    if not tariffs_df.empty and selected_code in tariffs_df['hs6_code'].values:
-                        st.error(f"⚠️ HS-6 code {selected_code} is subject to Canadian counter-tariffs.")
+                    ct_col = 'hs6_clean' if 'hs6_clean' in tariffs_df.columns else 'hs6_subheading'
+                    if not tariffs_df.empty and selected_code in tariffs_df[ct_col].astype(str).values:
+                        rate = tariffs_df.loc[tariffs_df[ct_col].astype(str) == selected_code, 'tariff_rate_pct'].max()
+                        st.warning(f"🇨🇦 **Canadian Import Counter-Tariff:** HS-6 `{selected_code}` is listed on Canada's counter-tariff schedule ({rate:.0f}% headline surtax; check Tab 1 of Tariff Tracker for Code `25-0466C` horizontal remission eligibility).")
                     else:
-                        st.success(f"✅ HS-6 code {selected_code} is not currently flagged in the counter-tariff schedule.")
+                        st.success(f"🇨🇦 **Canadian Import Counter-Tariff:** HS-6 `{selected_code}` is not subject to Canadian counter-tariffs.")
+
+                    us338_df = get_us_section338_tariffs()
+                    oct23_df = get_us_section338_oct23_reshuffle()
+                    if not oct23_df.empty and selected_code in oct23_df['hs6_clean'].astype(str).values:
+                        m_oct = oct23_df[oct23_df['hs6_clean'].astype(str) == selected_code].iloc[0]
+                        st.info(f"🇺🇸 **U.S. Section 338 Oct 23, 2026 Reshuffle:** `{selected_code}` ({m_oct['htsus_code']}) — **{m_oct['action']}** ({m_oct['ontario_ag_relevance']}).")
+                    elif not us338_df.empty and selected_code in us338_df['hs6_code'].astype(str).values:
+                        m_338 = us338_df[us338_df['hs6_code'].astype(str) == selected_code].iloc[0]
+                        st.error(f"🇺🇸 **U.S. Section 338 Export Measure:** HS-6 `{selected_code}` faces U.S. Section 338 action — **{m_338.get('measure_status', 'Active 50% Tariff')}**.")
+                    else:
+                        st.success(f"🇺🇸 **U.S. Section 338 Export Measure:** HS-6 `{selected_code}` is not flagged on the U.S. Section 338 tariff/ban schedule.")
 
             st.markdown("### Export Results")
             

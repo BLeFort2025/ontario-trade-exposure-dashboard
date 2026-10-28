@@ -25,6 +25,7 @@ from lib.chapter_labels import (
     get_value_add_complex,
     get_complex_role,
     AGRI_FOOD_CHAPTERS,
+    FARM_INPUT_CHAPTERS,
 )
 from lib.geo_utils import state_name_to_abbrev, get_valid_state_names
 
@@ -168,10 +169,12 @@ def get_state_trade(year: str, trade_type: str = None, chapter: str = None) -> p
         query += " AND trade_type = ?"
         params.append(trade_type)
 
-    # Handle virtual 87-AG / 87-AUTO chapters
+    # Handle virtual 87-AG / 87-AUTO chapters or macro chapter groups
     real_chapter = chapter
     if chapter in ("87-AG", "87-AUTO"):
         real_chapter = "87"
+    elif chapter in ("ALL_AGRI_FOOD", "ALL_FARM_INPUTS", "ALL_TRACKED"):
+        real_chapter = None
 
     if real_chapter:
         query += " AND hs2_chapter = ?"
@@ -182,13 +185,17 @@ def get_state_trade(year: str, trade_type: str = None, chapter: str = None) -> p
     df = pd.read_sql(query, conn, params=params)
 
     # Apply Ch 87 split
-    if chapter in ("87-AG", "87-AUTO") or (chapter is None):
+    if chapter in ("87-AG", "87-AUTO", "ALL_AGRI_FOOD", "ALL_FARM_INPUTS", "ALL_TRACKED") or (chapter is None):
         mask_87 = df["hs2_chapter"] == "87"
         df.loc[mask_87, "hs2_chapter"] = df.loc[mask_87, "hs6_code"].apply(
             lambda x: "87-AG" if is_ag_vehicle(x) else "87-AUTO"
         )
         if chapter in ("87-AG", "87-AUTO"):
             df = df[df["hs2_chapter"] == chapter]
+        elif chapter == "ALL_FARM_INPUTS":
+            df = df[df["hs2_chapter"].isin({"31", "38-AG", "84", "87-AG"})]
+        elif chapter in ("ALL_AGRI_FOOD", None):
+            df = df[df["hs2_chapter"].isin(AGRI_FOOD_CHAPTERS)]
 
     # Aggregate after split
     df = (
@@ -396,11 +403,14 @@ def get_tariff_matched_imports(year: str) -> pd.DataFrame:
         code = str(row.get("hs6_code", "")).strip()
         ch2 = str(row.get("hs2_chapter", "")).strip()
         
-        # Direct Ag Machinery Parts (Confirmed eligible by Finance Canada Sept 3, 2026)
+        # Direct Ag Machinery Parts (Confirmed eligible by Finance Canada Sept 3 & AAFC Oct 28, 2026)
         if code in ("843390", "843320"):
             return "🟢 Waived (Code 25-0466C - Farm Machinery)", True, 0.0
-        # Food & Beverage Processing Inputs (NAICS 31-33)
-        if code == "190120" or ch2 == "04":
+        # Food & Beverage Packaging Machinery Parts (Confirmed eligible under AAFC Oct 28 horizontal remission)
+        if code == "842290":
+            return "🟢 Waived (Code 25-0466C - Food Packaging Machinery)", True, 0.0
+        # Food, Beverage & Feed Processing Inputs (NAICS 311/312 & 11 - Dairy Ch 04, Molasses Ch 17, Mixes 1901.20, Milk Proteins/Casein Ch 35)
+        if code == "190120" or ch2 in ("04", "17", "35"):
             return "🟢 Waived (Code 25-0466C - Food Processing)", True, 0.0
         # Trailers & Transportation (Excluded from horizontal remission)
         if code.startswith("8716"):
@@ -618,7 +628,9 @@ def _get_global_conn() -> sqlite3.Connection:
 
 
 @st.cache_data(ttl=3600)
-def get_global_market_summary(year: str, trade_type: str = "Domestic exports") -> pd.DataFrame:
+def get_global_market_summary(
+    year: str, trade_type: str = "Domestic exports", chapter: str = None
+) -> pd.DataFrame:
     """Global country-level trade summary for Ontario, combining non-US and US trade.
 
     Returns a DataFrame with columns: country, country_iso3, trade_agreement, value_cad, share_pct
@@ -627,29 +639,33 @@ def get_global_market_summary(year: str, trade_type: str = "Domestic exports") -
     conn_gl = _get_global_conn()
     conn_us = _get_conn()
 
+    ch_clause_gl = "AND hs2_chapter = ?" if chapter else "AND (hs2_chapter BETWEEN '01' AND '24' OR hs2_chapter IN ('29-AG', '33-AG', '35', '38-AG', '41'))"
+    ch_clause_us = "AND hs2_chapter = ?" if chapter else "AND (hs2_chapter BETWEEN '01' AND '24' OR hs2_chapter IN ('29-AG', '33-AG', '35', '38-AG', '41'))"
+    params = [trade_type, f"{year}%", chapter] if chapter else [trade_type, f"{year}%"]
+
     # 1. Non-US trade from global_hs_trade
     df_non_us = pd.read_sql(
-        """
+        f"""
         SELECT country, country_iso3, trade_agreement, sum(value_cad) as value_cad
         FROM global_hs_trade
         WHERE trade_type = ? AND ref_date LIKE ?
-          AND hs2_chapter BETWEEN '01' AND '24'
+          {ch_clause_gl}
         GROUP BY country, country_iso3, trade_agreement
         """,
         conn_gl,
-        params=[trade_type, f"{year}%"],
+        params=params,
     )
 
     # 2. US total trade from state_hs_trade
     df_us = pd.read_sql(
-        """
+        f"""
         SELECT sum(value_cad) as value_cad
         FROM state_hs_trade
         WHERE trade_type = ? AND ref_date LIKE ?
-          AND hs2_chapter BETWEEN '01' AND '24'
+          {ch_clause_us}
         """,
         conn_us,
-        params=[trade_type, f"{year}%"],
+        params=params,
     )
     us_val = df_us["value_cad"].iloc[0] if len(df_us) > 0 and pd.notna(df_us["value_cad"].iloc[0]) else 0.0
 
@@ -671,9 +687,11 @@ def get_global_market_summary(year: str, trade_type: str = "Domestic exports") -
 
 
 @st.cache_data(ttl=3600)
-def get_global_agreement_summary(year: str, trade_type: str = "Domestic exports") -> pd.DataFrame:
+def get_global_agreement_summary(
+    year: str, trade_type: str = "Domestic exports", chapter: str = None
+) -> pd.DataFrame:
     """Aggregates Ontario trade by trade agreement corridor (CUSMA, CETA, CPTPP, etc.)."""
-    df = get_global_market_summary(year, trade_type)
+    df = get_global_market_summary(year, trade_type, chapter=chapter)
     summary = df.groupby("trade_agreement", as_index=False)["value_cad"].sum()
     total_val = summary["value_cad"].sum()
     summary["share_pct"] = (summary["value_cad"] / total_val * 100.0) if total_val > 0 else 0.0
@@ -686,8 +704,8 @@ def get_global_chapter_trade(year: str, chapter: str = None, trade_type: str = "
     conn_gl = _get_global_conn()
     conn_us = _get_conn()
 
-    ch_filter_gl = "AND hs2_chapter = ?" if chapter else "AND hs2_chapter BETWEEN '01' AND '24'"
-    ch_filter_us = "AND hs2_chapter = ?" if chapter else "AND hs2_chapter BETWEEN '01' AND '24'"
+    ch_filter_gl = "AND hs2_chapter = ?" if chapter else "AND (hs2_chapter BETWEEN '01' AND '24' OR hs2_chapter IN ('29-AG', '33-AG', '35', '38-AG', '41'))"
+    ch_filter_us = "AND hs2_chapter = ?" if chapter else "AND (hs2_chapter BETWEEN '01' AND '24' OR hs2_chapter IN ('29-AG', '33-AG', '35', '38-AG', '41'))"
     params_gl = [trade_type, f"{year}%", chapter] if chapter else [trade_type, f"{year}%"]
     params_us = [trade_type, f"{year}%", chapter] if chapter else [trade_type, f"{year}%"]
 

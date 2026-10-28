@@ -17,9 +17,10 @@ if "87" in chapter_options:
 chapter_options.extend(["87-AG", "87-AUTO"])
 chapter_options.sort()
 
-# Add 'All Agri-Food Chapters'
-all_chapters_opt = "All Agri-Food Chapters"
-display_options = [all_chapters_opt] + chapter_options
+# Add macro filter options
+all_chapters_opt = "All Agri-Food Chapters (HS 01–24 + Ag Derivatives)"
+all_inputs_opt = "All Farm Inputs & Ag Machinery (HS 31, 38-AG, 84, 87-AG)"
+display_options = [all_chapters_opt, all_inputs_opt] + chapter_options
 
 col1, col2, col3 = st.columns(3)
 
@@ -30,23 +31,29 @@ with col2:
     selected_chapter_display = st.selectbox(
         "Chapter filter", 
         display_options,
-        format_func=lambda x: x if x == all_chapters_opt else chapter_label(x)
+        format_func=lambda x: x if x in (all_chapters_opt, all_inputs_opt) else chapter_label(x)
     )
 
 with col3:
     available_years = get_available_years()
-    default_year = st.session_state.get('selected_year', '2024')
+    default_year = st.session_state.get('selected_year', '2025')
     if default_year not in available_years:
-        default_year = available_years[-1] if available_years else '2024'
+        default_year = '2025' if '2025' in available_years else (available_years[-1] if available_years else '2025')
     
     selected_year = st.selectbox(
         "Year",
         available_years,
         index=available_years.index(default_year) if default_year in available_years else 0
     )
+    st.session_state['selected_year'] = selected_year
 
 # Get data
-chapter_param = None if selected_chapter_display == all_chapters_opt else selected_chapter_display
+if selected_chapter_display == all_chapters_opt:
+    chapter_param = "ALL_AGRI_FOOD"
+elif selected_chapter_display == all_inputs_opt:
+    chapter_param = "ALL_FARM_INPUTS"
+else:
+    chapter_param = selected_chapter_display
 
 if trade_type == "Net Balance":
     df_exp = get_state_summary_for_map(selected_year, "Domestic exports", chapter_param)
@@ -109,8 +116,8 @@ if not df.empty:
         use_container_width=True
     )
     
-    if selected_chapter_display != all_chapters_opt:
-        st.markdown("### Top 15 States")
+    if True:
+        st.markdown(f"### Top 15 U.S. State Partners ({selected_chapter_display})")
         top15 = df.head(15).copy()
         
         # Determine bar color based on trade type

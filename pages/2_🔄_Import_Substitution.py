@@ -62,21 +62,22 @@ with tab1:
     )
     
     if not sub_matrix.empty:
-        # Deficit filter: imports > exports
+        # Deficit filter: imports > exports (Agri-Food baseline for headline KPIs, excluding 87-AUTO & non-ag industrial)
         deficits_all = sub_matrix[sub_matrix['net_balance'] < 0].copy()
+        deficits_agri = deficits_all[deficits_all['hs2_chapter'].isin(AGRI_FOOD_CHAPTERS)].copy()
         
-        # Headline KPI row
-        tot_all_deficit = deficits_all['net_deficit_cad'].sum()
-        high_feas_df = deficits_all[deficits_all['feasibility_tier'] == '🟢 High Domestic Feasibility']
+        # Headline KPI row (pure Agri-Food & Derivatives)
+        tot_all_deficit = deficits_agri['net_deficit_cad'].sum()
+        high_feas_df = deficits_agri[deficits_agri['feasibility_tier'] == '🟢 High Domestic Feasibility']
         tot_high_feas_deficit = high_feas_df['net_deficit_cad'].sum()
         
-        tariff_amp_df = deficits_all[deficits_all['faces_counter_tariff'] == True]
+        tariff_amp_df = deficits_agri[deficits_agri['faces_counter_tariff'] == True]
         tot_tariff_amp_deficit = tariff_amp_df['net_deficit_cad'].sum()
         
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        kpi1.metric("Total Net Import Deficit", format_currency(tot_all_deficit), help="All negative trade balances across all imported HS-6 codes.")
-        kpi2.metric("High Domestic Feasibility Deficit", format_currency(tot_high_feas_deficit), delta=f"{(tot_high_feas_deficit/tot_all_deficit)*100:.1f}% of total", delta_color="normal", help="Commodities Ontario actively produces at scale.")
-        kpi3.metric("Counter-Tariff Amplified", format_currency(tot_tariff_amp_deficit), delta="15-50% Price Advantage", delta_color="normal", help="Deficit goods facing Canada retaliatory tariffs.")
+        kpi1.metric("Total Agri-Food Import Deficit", format_currency(tot_all_deficit), help="All negative trade balances across Agri-Food & Derivative HS-6 codes (excludes automotive/non-ag).")
+        kpi2.metric("High Domestic Feasibility Deficit", format_currency(tot_high_feas_deficit), delta=f"{(tot_high_feas_deficit/tot_all_deficit)*100:.1f}% of agri-food deficit" if tot_all_deficit > 0 else "0%", delta_color="normal", help="Commodities Ontario actively produces at scale.")
+        kpi3.metric("Counter-Tariff Amplified", format_currency(tot_tariff_amp_deficit), delta="15-50% Price Advantage", delta_color="normal", help="Agri-food deficit goods facing Canada retaliatory tariffs.")
         kpi4.metric("High-Feasibility Lines", f"{len(high_feas_df):,} HS-6 codes")
         
         st.markdown("---")
@@ -249,7 +250,7 @@ with tab2:
             y="Value (M CAD)",
             color="Flow",
             barmode="group",
-            title=f"{selected_complex}: Raw vs. Processed Trade Balance (2025)",
+            title=f"{selected_complex}: Raw vs. Processed Trade Balance ({selected_year})",
             color_discrete_map={"Ontario Exports": "#2ca02c", "Ontario Imports": "#d62728"},
             height=400
         )
@@ -293,41 +294,53 @@ with tab3:
         with sim_col1:
             st.subheader("⚙️ Simulation Parameters")
             
+            # Dynamically compute each complex's processed deficit for selected_year
+            def _complex_proc_deficit(c_name):
+                sub_c = sub_matrix[(sub_matrix['value_add_complex'] == c_name) & (sub_matrix['complex_role'] == 'Value-Added Processed') & (sub_matrix['net_balance'] < 0)]
+                return float(sub_c['net_deficit_cad'].sum())
+
+            meat_def = _complex_proc_deficit("Red Meat & Livestock Complex")
+            grain_def = _complex_proc_deficit("Corn & Grain Complex")
+            dairy_def = _complex_proc_deficit("Dairy Value Chain")
+            soy_def = _complex_proc_deficit("Soybean Complex")
+            veg_def = _complex_proc_deficit("Greenhouse & Horticultural Complex")
+
             sim_target_scope = st.selectbox(
                 "Select Substitution Target Pool:",
                 options=[
-                    "All High-Feasibility Agri-Food ($9.47B pool)",
-                    "Counter-Tariff Amplified Goods ($2.46B pool)",
-                    "Red Meat & Livestock Processing Deficit ($450.6M)",
-                    "Corn & Grain Processing Deficit ($918.4M)",
-                    "Dairy Value-Add Processing Deficit ($370.2M)",
-                    "Soybean Value-Add Processing Deficit ($281.9M)",
-                    "Greenhouse & Processing Veg Deficit ($128.0M)",
+                    f"All High-Feasibility Agri-Food ({format_currency(tot_high_feas_deficit)} pool)",
+                    f"Counter-Tariff Amplified Goods ({format_currency(tot_tariff_amp_deficit)} pool)",
+                    f"Red Meat & Livestock Processing Deficit ({format_currency(meat_def)})",
+                    f"Corn & Grain Processing Deficit ({format_currency(grain_def)})",
+                    f"Dairy Value-Add Processing Deficit ({format_currency(dairy_def)})",
+                    f"Soybean Value-Add Processing Deficit ({format_currency(soy_def)})",
+                    f"Greenhouse & Processing Veg Deficit ({format_currency(veg_def)})",
                 ]
             )
+            
+            sector_choice = st.radio(
+                "Input-Output Multiplier Model (StatCan Table 36-10-0595-01):",
+                options=["food_manufacturing", "primary_agriculture"],
+                format_func=lambda s: "🏭 Food & Beverage Processing (NAICS 311/312)" if s == "food_manufacturing" else "🌾 Primary Agriculture & Greenhouse/Nursery (NAICS 111/112/1114)",
+                horizontal=False
+            )
+            sector_type = sector_choice
             
             # Map target pool to dollars
             if "All High-Feasibility" in sim_target_scope:
                 pool_dollars = tot_high_feas_deficit
-                sector_type = "food_manufacturing"
             elif "Counter-Tariff" in sim_target_scope:
                 pool_dollars = tot_tariff_amp_deficit
-                sector_type = "food_manufacturing"
             elif "Red Meat" in sim_target_scope:
-                pool_dollars = 450.6e6
-                sector_type = "food_manufacturing"
+                pool_dollars = meat_def
             elif "Corn & Grain" in sim_target_scope:
-                pool_dollars = 918.4e6
-                sector_type = "food_manufacturing"
+                pool_dollars = grain_def
             elif "Dairy" in sim_target_scope:
-                pool_dollars = 370.2e6
-                sector_type = "food_manufacturing"
+                pool_dollars = dairy_def
             elif "Soybean" in sim_target_scope:
-                pool_dollars = 281.9e6
-                sector_type = "food_manufacturing"
+                pool_dollars = soy_def
             else:
-                pool_dollars = 128.0e6
-                sector_type = "food_manufacturing"
+                pool_dollars = veg_def
                 
             disp_rate_pct = st.slider(
                 "Target Import Displacement Rate (%):",
