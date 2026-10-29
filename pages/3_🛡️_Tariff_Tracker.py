@@ -288,15 +288,15 @@ with tab2:
     st.warning(
         """
         🔄 **NEW — October 23, 2026 White House Proclamation (Effective Oct 30, 2026 at 12:01 a.m. EDT):**  
-        The U.S. further modified Proclamation 11048 (`HTSUS 9903.03.14` — 50% Section 338 duty, applicable **regardless of USMCA/CUSMA preference** and **stacked on top of Section 232**):
-        * **🟢 22 Tariff Lines REMOVED (Tariff Relief for Ag/Food Machinery & Packaging):** Removes the 50% duty from **egg, fruit & produce grading machines (`8433.60.00`, `$12.66M` ON exports)**, **food/beverage packaging, bottling, thermal processing & cold-chain refrigeration equipment (`8422.40.91`, `8422.30.91`, `8419.89.95`, `8418.69.01` — `$505.6M` in 6-digit ON exports)**, **9 food & produce packaging lines** (molded pulp egg/berry trays `4823.70.00`, corrugated boxes `4819.10.00`, aseptic dairy carton stock `4811.51.20/.40`, plastic produce crates `3923.10.90`, polyethylene bags `3923.21.00`, BOPP food film `3920.20.00`), **edible seaweed (`1212.21.00`, `$233.5K`)**, and **7 thin hardwood plywood lines (`4412.33/.34`)**.
-        * **🔴 100 Tariff Lines ADDED (New 50% Duty Effective Oct 30):** Imposes a new 50% duty on **all 13 tariff lines of sweetened cocoa powder (`1806.10.05`–`1806.10.75`)** to block sugar-cocoa arbitrage (note: bulk chocolate `1806.20` and chocolate bars `1806.31/.32/.90` remain **exempt**), **heavy-duty multi-wall paper sacks >=40cm (`4819.30.00`, used for 20–25 kg seed/feed/flour/milk powder)**, **solid-sided wooden packing boxes (`4415.10.30`)**, **wooden food skewers/ice cream sticks (`4421.99.60`)**, **unprinted pressure-sensitive labels (`4821.90.20`)**, **orchard grafting putty (`3214.10.00`)**, **diagnostic lab reagents (`3822.19/.90`)**, **chest freezers <=800L (`8418.30.00`)**, **hand-operated steel valves (`8481.80.30`)**, and **43 wool, fine animal hair, coconut coir & textile carpet lines (`5701`–`5705`)**.
-        * **🚨 Retained Primary Agriculture & Sept 8 Escalations:** **Primary Floriculture & Nursery (`0601`–`0604`, NAICS 1114)** and **Natural Honey (`0409.00.00`)** were **not removed** and remain subject to the 50% Section 338 tariff (`$438M` CAD exposed). Meanwhile, the Sept 8 Proclamations (`11061`–`11065`) enforced **import bans** on retail Canadian alcohol (`<=4L`) and whey/molasses (while exempting bulk whisky/spirits `>4L`), and added 50% tariffs on **22 cheese lines (`0406`, `$117.5M`)**, **modified animal/vegetable fats & oils (`1518.00.40`, `$217.4M`)**, and **raw bovine hides (`4101.50/.90`, `$28.4M`)**.
+        The U.S. further modified Proclamation 11048 (`HTSUS 9903.03.14` — 50% Section 338 duty, applicable **regardless of USMCA/CUSMA preference**, **stacked on top of Section 232**, and with **no in-transit exemption**):
+        * **🟢 22 Tariff Lines REMOVED (`$3.09B USD` CA→US / `$1.87B USD` [`$2.57B CAD`] ON→US Relieved):** Following coordinated petitions by **PMMI, IFPA, CPMA, IDFA, CBA, and ABA**, the U.S. removed the 50% duty from **5 ag/food/packaging machinery lines (`$496.4M USD` / `$680.1M CAD` ON exports: `8433.60.00` egg/fruit graders, `8422.40.91` wrapping/packing, `8422.30.91` bottling/filling, `8419.89.95` pasteurizers/dryers, `8418.69.01` commercial refrigeration — note: standalone replacement parts `8422.90.91` & brewery machinery `8438.40.00` remain at 50%)**, **9 food & produce packaging lines (`$1.34B USD` / `$1.84B CAD` ON exports: PE bags `3923.21.00`, corrugated produce boxes `4819.10.00`, reusable plastic harvest crates `3923.10.90` resolving the Leamington-Detroit RPC crisis, BOPP film `3920.20.00`, `<40cm` paper bags `4819.40.00`, molded pulp egg/berry trays `4823.70.00`, and aseptic dairy carton stock `4811.51.20/.40`)**, **edible seaweed (`1212.21.00`)**, and **7 thin hardwood plywood lines `<=6 mm` (`4412.33/.34`, rescuing birch laser die-boards for corrugated box makers)**.
+        * **🔴 100 Tariff Lines ADDED (`$1.90B USD` CA→US / `$963.8M USD` [`$1.32B CAD`] ON→US Newly Hit Effective Oct 30):** Imposes a new 50% duty on **all 13 lines of sweetened cocoa powder (`1806.10.05`–`1806.10.75`, `$25.7M USD` / `$35.2M CAD` ON — only 1.3% of Chapter 18, while `$3.64B USD` CA / `$2.33B USD` ON in bulk chocolate `1806.20` & bars/spreads `1806.31/.32/.90` remain 0% USMCA exempt)**, **heavy-duty `>=40cm` multi-wall paper sacks (`4819.30.00`, `$54.2M USD` ON, used for 20–25 kg / 50 lb seed, feed, flour & dairy powder) + unbleached kraft sack paper (`4804.31.60`)**, **bottle-grade virgin PET & Ontario rPET resin `>=78 ml/g` (`3907.61.00`, `$124.8M USD` ON)**, **unprinted pressure-sensitive scale/PTI produce labels (`4821.90.20`, `$84.7M USD` ON — while printed labels `4821.10` remain 0% exempt)**, **orchard/nursery grafting putty & greenhouse glazing mastics (`3214.10.00`, `$97.5M USD` ON)**, **food-safety & veterinary diagnostic reagents (`3822.19/.90`, `$171.4M USD` ON)**, **municipal biosolid fertilizer pellets (`3825.20.00`, `$11.9M USD` ON)**, **chest freezers `<=800L` (`8418.30.00`, `$23.4M USD` ON)**, **hand-operated steel valves (`8481.80.30`, `$131.3M USD` ON — hit with a 100% combined duty: 50% Sec. 338 + 50% Sec. 232 steel)**, and **43 wool, fine animal hair, coconut coir & textile carpet lines (`5701`–`5705`, `$40.7M USD` ON)**.
+        * **🚨 Continuity of Primary Agriculture (`NAICS 1114`) & Sept 8 Proclamations (`11061`–`11065`):** In **Primary Floriculture & Nursery (`HS Chapter 06`, NAICS 1114)**, the audited **"80/20 Rule"** remains unchanged: **`$150.7M CAD`** in Ontario exports across 18 specific 8-digit lines (`0603` cut flowers, `0602.90.20` live orchids, `0602.90.50` mushroom spawn, `0601.10` dormant bulbs, `0604.90` dried foliage) remain under the 50% tariff, whereas **`~$510M CAD` (80% of Chapter 06)**—including finished potted greenhouse plants (`0602.90.60`), fruit/nut nursery trees (`0602.20`), rose bushes (`0602.40`), unrooted cuttings (`0602.10`), and Christmas trees (`0604.20`)—enter **100% duty-free under USMCA**. Meanwhile, the Sept 8 Proclamations (`11061`–`11065`) enforce a **3-tier spirits regime** (`<=4L` bottled banned; `>4L` straight rye `2208.30.6075` 50% duty; **`>4L` bulk blended Canadian whisky `2208.30.6085` & bulk liqueurs `2208.70.0060` 0% exempt**), ban whey (`0404`) and syrups/molasses (`1702/1703`), and maintain 50% tariffs on cheeses (`0406`), modified fats/oils/UCO (`1518.00.40`), and heavy raw bovine hides (`4101.50/.90`).
         """
     )
 
     # --- OCT 23, 2026 RESHUFFLE INTERACTIVE EXPLORER ---
-    with st.expander("🔍 **Explore All 122 Tariff Lines in the October 23, 2026 Section 338 Reshuffle (22 Removed vs. 100 Added)**", expanded=True):
+    with st.expander("🔍 **Explore All 122 Tariff Lines in the October 23, 2026 Section 338 Reshuffle (Verified 8-Digit USITC & StatCan CIMT Data)**", expanded=True):
         try:
             oct23_df = get_us_section338_oct23_reshuffle()
         except Exception as e:
@@ -305,10 +305,10 @@ with tab2:
 
         if not oct23_df.empty:
             r_col1, r_col2, r_col3, r_col4 = st.columns(4)
-            r_col1.metric("Lines Removed (Part A Relief)", "22 HTS Lines", delta="Ag/Food Machinery & Packaging", delta_color="normal")
-            r_col2.metric("ON Machinery Exports Relieved", "$518.3M CAD", delta="8433.60 + 8422 + 8419 + 8418", delta_color="normal")
-            r_col3.metric("Lines Added (Part B 50% Duty)", "100 HTS Lines", delta="13 Cocoa + 43 Wool/Carpet + 44 Ind/Pkg", delta_color="inverse")
-            r_col4.metric("Effective Date & Time", "Oct 30, 2026", delta="12:01 a.m. EDT", delta_color="off")
+            r_col1.metric("22 Lines Removed (Part A Relief)", "$1.87B USD ($2.57B CAD) ON", delta="60.6% of $3.09B USD CA->US", delta_color="normal")
+            r_col2.metric("ON Machinery & Packaging Relieved", "$680M Mach. + $1.84B Pkg. (CAD)", delta="PMMI: $71M duty paid Aug–Oct", delta_color="normal")
+            r_col3.metric("100 Lines Added (Part B 50% Duty)", "$963.8M USD ($1.32B CAD) ON", delta="13 Cocoa + 43 Ch.57 + 44 Ind/Pkg", delta_color="inverse")
+            r_col4.metric("Effective Date (No In-Transit Waiver)", "Oct 30, 2026", delta="12:01 a.m. EDT (HTSUS Note 51(b)(3))", delta_color="off")
 
             f_col1, f_col2, f_col3 = st.columns([1.3, 1.7, 1.2])
             with f_col1:
@@ -340,20 +340,22 @@ with tab2:
                 ]
 
             oct23_disp = oct23_filt.copy()
-            oct23_disp["ON->US 2024 (HS-6)"] = oct23_disp["on_us_exports_2024_cad"].apply(lambda v: format_currency(v) if v > 0 else "— (Non-Ag DB / $0)")
-            oct23_disp["ON->US 2025 (HS-6)"] = oct23_disp["on_us_exports_2025_cad"].apply(lambda v: format_currency(v) if v > 0 else "— (Non-Ag DB / $0)")
-            oct23_disp["ON->US 2026 YTD (HS-6)"] = oct23_disp["on_us_exports_2026_ytd_cad"].apply(lambda v: format_currency(v) if v > 0 else "— (Non-Ag DB / $0)")
+            oct23_disp["CA->US 2025 (USD)"] = oct23_disp["ca_us_exports_2025_usd"].apply(format_currency)
+            oct23_disp["ON Share (%)"] = oct23_disp["ontario_share_pct"].apply(lambda v: f"{v:.1f}%")
+            oct23_disp["ON->US 2025 (USD)"] = oct23_disp["on_us_exports_2025_usd"].apply(format_currency)
+            oct23_disp["ON->US 2025 (CAD)"] = oct23_disp["on_us_exports_2025_cad"].apply(format_currency)
 
             st.dataframe(
                 oct23_disp[[
                     "action_short", "htsus_code", "sector_category", "description",
-                    "ontario_ag_relevance", "ON->US 2024 (HS-6)", "ON->US 2025 (HS-6)", "ON->US 2026 YTD (HS-6)"
+                    "post_oct30_rate", "CA->US 2025 (USD)", "ON Share (%)", "ON->US 2025 (USD)", "ON->US 2025 (CAD)", "ontario_ag_relevance"
                 ]].rename(columns={
                     "action_short": "Oct 30 Action",
                     "htsus_code": "HTSUS 8-Digit",
                     "sector_category": "Sector Category",
                     "description": "Official HTSUS Description",
-                    "ontario_ag_relevance": "Ontario Agri-Food & Supply Chain Impact"
+                    "post_oct30_rate": "Post-Oct 30 Rate",
+                    "ontario_ag_relevance": "Ontario Agri-Food & Supply Chain Verification"
                 }),
                 use_container_width=True,
                 hide_index=True
@@ -361,12 +363,39 @@ with tab2:
 
             oct23_csv = oct23_filt.to_csv(index=False).encode("utf-8")
             st.download_button(
-                "📥 Download Full Oct 23, 2026 Section 338 Reshuffle (122 HTS Lines) as CSV",
+                "📥 Download Full Oct 23, 2026 Section 338 Reshuffle (122 HTS Lines with Verified 8-Digit Trade Data) as CSV",
                 data=oct23_csv,
-                file_name="us_section338_oct23_2026_reshuffle_122_lines.csv",
+                file_name="us_section338_oct23_2026_reshuffle_122_lines_verified.csv",
                 mime="text/csv",
                 key="oct23_dl"
             )
+
+    # --- TARIFF ENGINEERING & CUSTOMS PLAYBOOK EXPANDER ---
+    with st.expander("🛠️ **4 Legal Tariff-Engineering Pathways, Chapter 18 Sugar-Cocoa Quota Reallocation & Chapter 22 Three-Tier Spirits Matrix**", expanded=False):
+        st.markdown(
+            """
+            #### 1. Four Legally Rigorous Tariff-Engineering & Customs Clearance Playbooks (Effective Oct 30, 2026)
+            1. **🍫 Chapter 18 SCP Quota Reallocation (`1806.10` → `1806.20.7500 / .9500` or `1806.90.5500`):**
+               * Only **1.3%** (`$47.6M USD` CA / `$25.7M USD` ON) of Heading 1806 exports were hit in `1806.10` (sweetened cocoa powder), while **98.7%** (`$3.64B USD` CA / `$2.33B USD` ON) in `1806.20` (bulk >2 kg), `1806.31/.32` (bars <=2 kg), and `1806.90` (spreads/chips/preparations) remain **0% USMCA exempt**.
+               * Because Canada's **59,250 MT WTO Sugar-Containing Products (SCP) TRQ** (*Export Control List Item 5205*, Ch. 17 Note 7) and **60,500 MT USMCA SCP TRQ (`9823.53.02`)** are shared basket quotas, Ontario ingredient blenders can incorporate cocoa butter, vegetable fat, or milk solids into **>2 kg bulk chocolate crumb or compound preparation totes (`1806.20.7500` / `1806.20.9500`)** or **<=2 kg preparations (`1806.90.5500`)** to enter the U.S. at **0% USMCA + 0% Section 338 duty** using the exact same Item 5205 quota!
+            2. **🏷️ Chapter 48 Pressure-Sensitive Label Pre-Printing (`4821.90.20` → `4821.10.20 / .40`):**
+               * Annex I, Part B added **unprinted** pressure-sensitive paper/paperboard labels (`4821.90.20`, `$84.7M USD` ON exports), used for grocery meat/deli weigh scales and PTI produce barcoding, but omitted **printed** pressure-sensitive labels (`4821.10.20` / `4821.10.40`).
+               * Ontario label converters (GTA, London, Kitchener) that pre-print a customer brand header, tare/traceability grid, or regulatory legend onto thermal label rolls shift classification to **`4821.10` (0% duty)**.
+            3. **🛍️ Chapter 48 Multi-Wall Paper Sack Dimensional Engineering (`4819.30.00` `>=40 cm` → `4819.40.00` `<40 cm`):**
+               * The October 23 Proclamation split Heading 4819 at a **40.0 cm (15.75-inch) base width**: adding a 50% tariff on `4819.30.00` (`>=40 cm` base multi-wall kraft sacks for 20–25 kg / 50 lb seed, feed, flour, and dairy powder; `$54.2M USD` ON), while removing the 50% tariff from `4819.40.00` (`<40 cm` base paper sacks; `$102.1M USD` ON).
+               * Where automated bagging lines permit, narrowing multi-wall sack base width from `40.0 cm` to **`38.5–39.5 cm`** (with a slightly deeper gusset or taller sack height to preserve 20 kg / 50 lb volume) legally shifts the sack into **newly exempted `4819.40.00` (0% duty)**.
+            4. **⚙️ Chapter 84 Machinery Commissioning Spares (GRI 1 / Section XVI Notes):**
+               * While complete food/beverage packaging and processing machines (`8418.69.01`, `8419.89.95`, `8422.30.91`, `8422.40.91`, `8433.60.00`) are **0% exempt** effective October 30, standalone replacement parts (`8422.90.91`, `8421.99.01`) and brewery machinery (`8438.40.00`) remain at **50%**. Initial commissioning wear parts and format change-parts shipped on the same conveyance under a single machine contract should be entered under the complete machine heading rather than billed on separate spare-part entries.
+
+            ---
+            #### 2. Three-Tier Canadian Spirits & Alcohol Verification (Proclamations 11061 & 11064, CBP CSMS #70050970)
+            | Regulatory Tier | HTSUS 10-Digit Lines | Container / Packaging Condition | Post-Sept 29 / Oct 30 Legal Status | Ontario & National Supply-Chain Impact |
+            | :--- | :--- | :--- | :--- | :--- |
+            | **Tier 1: Absolute Import Prohibition** | `2203.00.00` (Beer), `2204.21` (Bottled Wine), `2208.30.6055/.65` (Bottled Whisky/Rye `<=4L`), `2208.70.0030` (Bottled Liqueurs `<=4L`) | Any form (41 lines) or **"Packaged"** for direct consumption (35 lines) | **🚫 BANNED FROM U.S. ENTRY** (ACE Rejects 239, 335, 886; no FTZ admission) | Retail bottled Canadian whisky (Crown Royal, Canadian Club, Forty Creek) and retail wine/beer barred from U.S. ports. |
+            | **Tier 2: Unpackaged Bulk Spirits (50% Tariff)** | `2208.30.6075` (Bulk Straight Rye `>4L`), `2208.30.6040` (Bulk Bourbon `>4L`), `2208.50.0060` (Bulk Gin `>4L`), `2208.60.5000` (Bulk Vodka `>4L`) | Unpackaged in bulk ISO tanks, rail tankers, or casks `>4 liters` | **🔴 50% Section 338 Tariff** (`9903.03.12 / .13`) | Evades the Proclamation 11061 import ban if unpackaged (`>4L`), but still pays the 50% Section 338 duty. |
+            | **Tier 3: Duty-Free Bulk Spirits Carveout (0% Exempt)** | **`2208.30.6085`** (Whiskies, nesoi `>4L` — Canadian blended/corn whisky) & **`2208.70.0060`** (Liqueurs/cordials `>4L`) | In containers `>4 liters` (20-ft ISO tanks, bulk totes, oak barrels) | **🟢 0% MFN + 0% Section 338 (COMPLETELY EXEMPT)** | Allows Ontario distilleries (Windsor, Amherstburg, Grimsby) to ship bulk blended Canadian whisky & liqueur base **100% duty-free** to U.S. bottling plants! |
+            """
+        )
 
     # --- PHASE 5: U.S. CENSUS 4-DIGIT NAICS PACKAGING, WOOD, PAPER & MACHINERY CONTEXT ---
     with st.expander("📦 **Empirical Bilateral Trade Context for Non-Agri-Food Packaging, Wood, Paper, Plastics & Machinery Sectors (`census_us_state_exports_to_canada`)**", expanded=False):
