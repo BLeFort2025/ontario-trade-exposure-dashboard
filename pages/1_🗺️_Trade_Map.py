@@ -22,7 +22,7 @@ all_chapters_opt = "All Agri-Food Chapters (HS 01–24 + Ag Derivatives)"
 all_inputs_opt = "All Farm Inputs & Ag Machinery (HS 31, 38-AG, 84, 87-AG)"
 display_options = [all_chapters_opt, all_inputs_opt] + chapter_options
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns([1.1, 1.8, 0.9, 1.3])
 
 with col1:
     trade_type = st.radio("Trade Type", ["Exports", "Imports", "Net Balance"])
@@ -47,6 +47,18 @@ with col3:
     )
     st.session_state['selected_year'] = selected_year
 
+with col4:
+    current_mode = st.session_state.get("trade_mode", "domestic")
+    mode_label = st.radio(
+        "Export Accounting Basis",
+        options=["domestic", "total"],
+        index=0 if current_mode == "domestic" else 1,
+        format_func=lambda m: "🌾 Domestic ($23.60B)" if m == "domestic" else "🌐 Total Commercial ($23.78B OMAFA)",
+        help="Synced with Executive Overview: 'Domestic' reports strict Ontario-origin production ($23.60B in 2025); 'Total Commercial' includes foreign-origin re-exports routed through Ontario hubs ($23.78B OMAFA parity)."
+    )
+    st.session_state["trade_mode"] = mode_label
+    trade_mode = mode_label
+
 # Get data
 if selected_chapter_display == all_chapters_opt:
     chapter_param = "ALL_AGRI_FOOD"
@@ -56,8 +68,8 @@ else:
     chapter_param = selected_chapter_display
 
 if trade_type == "Net Balance":
-    df_exp = get_state_summary_for_map(selected_year, "Domestic exports", chapter_param)
-    df_imp = get_state_summary_for_map(selected_year, "Imports", chapter_param)
+    df_exp = get_state_summary_for_map(selected_year, "Domestic exports", chapter_param, trade_mode=trade_mode)
+    df_imp = get_state_summary_for_map(selected_year, "Imports", chapter_param, trade_mode=trade_mode)
     df_exp = df_exp.rename(columns={"value_cad": "exports"})
     df_imp = df_imp.rename(columns={"value_cad": "imports"})
     df = pd.merge(df_exp, df_imp, on=["state", "state_abbrev"], how="outer").fillna(0)
@@ -68,7 +80,7 @@ if trade_type == "Net Balance":
     color_mid = 0
 else:
     db_trade_type = "Domestic exports" if trade_type == "Exports" else "Imports"
-    df = get_state_summary_for_map(selected_year, db_trade_type, chapter_param)
+    df = get_state_summary_for_map(selected_year, db_trade_type, chapter_param, trade_mode=trade_mode)
     
     # Sequential color scales
     color_scale = "Greens" if trade_type == "Exports" else "Reds"

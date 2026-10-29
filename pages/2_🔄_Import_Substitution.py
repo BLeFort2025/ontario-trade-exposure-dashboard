@@ -5,7 +5,9 @@ import plotly.graph_objects as go
 from lib.data_loader import (
     get_net_balance, 
     get_import_substitution_matrix, 
-    calculate_substitution_impact
+    calculate_substitution_impact,
+    get_provincial_napcs_summary,
+    get_national_naics_detail
 )
 from lib.chapter_labels import (
     chapter_label, 
@@ -409,14 +411,215 @@ with tab4:
     st.header("🍁 Inter-Provincial Trade & National Food Autonomy")
     st.markdown(
         """
-        Import replacement does not stop at Ontario’s borders. Canada as a whole imports over **$25 Billion** in agricultural 
-        and food products from the United States that could be produced domestically. 
+        Import replacement does not stop at Ontario’s borders. Canada as a whole imports billions in agricultural, 
+        food, consumer, and packaging products from the United States that could be supplied domestically. 
         
-        Ontario possesses the manufacturing scale, greenhouse infrastructure, and logistics network to supply neighboring 
-        provinces (Quebec, Atlantic Canada, the Prairies, and BC), replacing foreign imports on a national scale.
+        Ontario possesses the manufacturing scale, **primary greenhouse/nursery/floriculture infrastructure (NAICS 1114)**, 
+        and logistics network to supply neighboring provinces (Quebec, Atlantic Canada, the Prairies, and BC), 
+        replacing U.S. imports on a national scale.
         """
     )
-    
+
+    # ── SECTION A: PROVINCIAL NAPCS U.S. IMPORT REPLACEMENT EXPLORER ──
+    st.subheader("📊 1. Provincial U.S. Import Replacement Explorer (StatCan NAPCS)")
+    st.caption(
+        "Empirical provincial trade balances from `provincial_napcs_trade` showing how much other Canadian provinces "
+        "currently import from the United States—representing the inter-provincial market pool Ontario producers can target."
+    )
+
+    napcs_col1, napcs_col2 = st.columns([2, 1])
+    with napcs_col1:
+        napcs_sector = st.selectbox(
+            "Select NAPCS Commodity Sector:",
+            options=[
+                "Farm, fishing and intermediate food products [C11]",
+                "Consumer goods [C22]",
+                "Forestry products and building and packaging materials [C16]",
+            ],
+            index=0,
+            key="napcs_sector_sel"
+        )
+    with napcs_col2:
+        napcs_partner = st.radio(
+            "Trade Partner Scope:",
+            options=["United States", "All countries"],
+            horizontal=True,
+            key="napcs_partner_sel"
+        )
+
+    try:
+        napcs_df = get_provincial_napcs_summary(
+            year=selected_year,
+            napcs_sector=napcs_sector,
+            partner=napcs_partner
+        )
+    except Exception as e:
+        st.error(f"Error loading provincial NAPCS data: {e}")
+        napcs_df = pd.DataFrame()
+
+    if not napcs_df.empty:
+        can_row = napcs_df[napcs_df["geo"] == "Canada"]
+        on_row = napcs_df[napcs_df["geo"] == "Ontario"]
+        roc_df = napcs_df[~napcs_df["geo"].isin(["Canada", "Ontario"])].copy()
+
+        can_imp = float(can_row["Imports"].sum()) if not can_row.empty else float(roc_df["Imports"].sum())
+        on_imp = float(on_row["Imports"].sum()) if not on_row.empty else 0.0
+        roc_imp = float(roc_df["Imports"].sum())
+        on_exp = float(on_row["Total Exports"].sum()) if not on_row.empty else 0.0
+
+        nk1, nk2, nk3, nk4 = st.columns(4)
+        nk1.metric(
+            f"Canada Total Imports ({napcs_partner})",
+            format_currency(can_imp),
+            help=f"Total national imports in {napcs_sector} ({selected_year})."
+        )
+        nk2.metric(
+            "Rest-of-Canada (ROC) Imports",
+            format_currency(roc_imp),
+            delta="Target Inter-Provincial Pool",
+            delta_color="normal",
+            help="Imports entering BC, Alberta, Quebec, Manitoba, Saskatchewan, and Atlantic Canada from outside the country."
+        )
+        nk3.metric(
+            "Ontario Direct Imports",
+            format_currency(on_imp),
+            help="Imports directly entering Ontario."
+        )
+        nk4.metric(
+            "Ontario Total Exports",
+            format_currency(on_exp),
+            delta="Ontario Supply Capacity",
+            delta_color="normal",
+            help="Ontario's existing export scale in this NAPCS category."
+        )
+
+        # Horizontal Bar Chart of Provincial Imports (excluding Canada aggregate)
+        prov_only_df = napcs_df[napcs_df["geo"] != "Canada"].sort_values("Imports", ascending=True).copy()
+        prov_only_df["Imports ($M CAD)"] = prov_only_df["Imports"] / 1e6
+        prov_only_df["Total Exports ($M CAD)"] = prov_only_df["Total Exports"] / 1e6
+
+        fig_napcs = px.bar(
+            prov_only_df,
+            y="geo",
+            x=["Imports ($M CAD)", "Total Exports ($M CAD)"],
+            barmode="group",
+            orientation="h",
+            title=f"Provincial Imports vs. Total Exports — {napcs_sector} ({napcs_partner}, {selected_year})",
+            labels={"geo": "Province / Territory", "value": "Trade Value ($M CAD)", "variable": "Flow"},
+            color_discrete_map={"Imports ($M CAD)": "#d62728", "Total Exports ($M CAD)": "#2ca02c"},
+            height=430
+        )
+        st.plotly_chart(fig_napcs, use_container_width=True)
+
+        with st.expander("📋 View Full Provincial NAPCS Table"):
+            napcs_disp = napcs_df.copy()
+            for c_name in ["Domestic Exports", "Re-exports", "Total Exports", "Imports", "Net Balance"]:
+                napcs_disp[c_name] = napcs_disp[c_name].apply(format_currency)
+            st.dataframe(
+                napcs_disp.rename(columns={"geo": "Province / Jurisdiction"}),
+                use_container_width=True,
+                hide_index=True
+            )
+
+    st.markdown("---")
+
+    # ── SECTION B: NATIONAL 6-DIGIT NAICS IMPORT SUBSTITUTION MATRIX ──
+    st.subheader("🌾 2. National 6-Digit NAICS Agri-Food & Primary Ag Import Replacement Matrix")
+    st.caption(
+        "Granular 6-digit NAICS Canada-U.S. trade balances (`national_naics_trade`). Note: **Nursery, Floriculture & "
+        "Greenhouse production (NAICS 1114)** is strictly classified as **Primary Agriculture**."
+    )
+
+    try:
+        naics_df = get_national_naics_detail(year=selected_year, partner="United States")
+    except Exception as e:
+        st.error(f"Error loading national NAICS trade data: {e}")
+        naics_df = pd.DataFrame()
+
+    if not naics_df.empty:
+        naics_groups = [
+            "All Agri-Food, Primary Ag & Farm Input Sectors",
+            "🌸 Primary Agriculture — Greenhouse, Nursery & Floriculture (NAICS 1114)",
+            "🌾 Primary Agriculture — Field Crops, Fruit & Vegetables (NAICS 111)",
+            "🐄 Primary Agriculture — Livestock, Dairy, Poultry & Honey (NAICS 112)",
+            "🏭 Food, Beverage & Feed Processing (NAICS 311/312)",
+            "🧪 Farm Inputs — Fertilizers & Crop Protection (NAICS 3253)",
+        ]
+        sel_naics_group = st.selectbox(
+            "Filter by Primary Agriculture / Agri-Food Sector:",
+            options=naics_groups,
+            index=0,
+            key="naics_grp_sel"
+        )
+
+        if sel_naics_group == "All Agri-Food, Primary Ag & Farm Input Sectors":
+            naics_filt = naics_df[naics_df["sector_group"] != "⚙️ Other Industrial / Manufacturing"].copy()
+        else:
+            naics_filt = naics_df[naics_df["sector_group"] == sel_naics_group].copy()
+
+        # Primary Ag vs Processing summary KPIs
+        prim_ag_df = naics_df[naics_df["is_primary_agriculture"] == 1]
+        n1114_df = naics_df[naics_df["naics_code"].str.startswith("1114")]
+        proc_ag_df = naics_df[naics_df["sector_group"] == "🏭 Food, Beverage & Feed Processing (NAICS 311/312)"]
+
+        nk_a, nk_b, nk_c, nk_d = st.columns(4)
+        nk_a.metric(
+            "Selected Sector U.S. Imports",
+            format_currency(naics_filt["Imports"].sum()),
+            delta=f"{len(naics_filt)} 6-Digit NAICS Industries",
+            delta_color="off"
+        )
+        nk_b.metric(
+            "Primary Ag U.S. Imports (NAICS 111/112)",
+            format_currency(prim_ag_df["Imports"].sum()),
+            delta=f"Exports: {format_currency(prim_ag_df['Total Exports'].sum())}",
+            delta_color="normal"
+        )
+        nk_c.metric(
+            "Primary Greenhouse/Nursery (NAICS 1114)",
+            format_currency(n1114_df["Total Exports"].sum()),
+            delta=f"Surplus: +{format_currency(n1114_df['Net Balance'].sum())}",
+            delta_color="normal",
+            help="NAICS 111411 (Mushrooms), 111419 (Greenhouse vegetables/crops), 111421 (Nursery/trees), 111422 (Floriculture)."
+        )
+        nk_d.metric(
+            "Processed Food U.S. Imports (NAICS 311/312)",
+            format_currency(proc_ag_df["Imports"].sum()),
+            delta=f"Exports: {format_currency(proc_ag_df['Total Exports'].sum())}",
+            delta_color="normal"
+        )
+
+        naics_disp = naics_filt.copy()
+        for col_c in ["Domestic Exports", "Re-exports", "Total Exports", "Imports", "Net Balance"]:
+            naics_disp[col_c] = naics_disp[col_c].apply(format_currency)
+
+        st.dataframe(
+            naics_disp[[
+                "naics_code", "naics_clean", "sector_group",
+                "Imports", "Total Exports", "Net Balance"
+            ]].rename(columns={
+                "naics_code": "6-Digit NAICS",
+                "naics_clean": "Industry Description",
+                "sector_group": "Sector Classification",
+                "Imports": "Canada U.S. Imports (CAD)",
+                "Total Exports": "Canada U.S. Exports (CAD)",
+                "Net Balance": "Net Trade Balance (CAD)"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        naics_csv = naics_filt.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Download National 6-Digit NAICS Trade Matrix (CSV)",
+            data=naics_csv,
+            file_name=f"canada_national_6digit_naics_us_trade_{selected_year}.csv",
+            mime="text/csv",
+            key="naics_dl_btn"
+        )
+
+    st.markdown("---")
+
     col_nat1, col_nat2 = st.columns(2)
     
     with col_nat1:
@@ -426,21 +629,21 @@ with tab4:
             Based on Ontario's domestic scale and production surpluses, these 5 sectors represent the highest-potential 
             candidates to displace foreign food imports across other Canadian provinces:
             
-            1. **🍅 Greenhouse Vegetables (Tomatoes, Peppers, Cucumbers):**
-               * *Ontario Surplus:* **+$1.4 Billion CAD**.
-               * *National Opportunity:* Replacing Mexican and California field produce in Quebec and Atlantic Canada year-round through Ontario's Kingsville/Leamington cluster.
-            2. **🍞 Bakery & Cereal Preparations:**
-               * *Ontario Scale:* Canada's largest bakery manufacturing hub (industrial bread, pasta, tortillas, snack foods).
-               * *National Opportunity:* Displacing Midwest U.S. bakery shipments into Western and Eastern Canada.
-            3. **🥩 Value-Added Pork & Deli Meats:**
-               * *Ontario Strength:* High provincial hog production and federally inspected processing capacity (Sofina, Conestoga).
-               * *National Opportunity:* Supplying pre-packaged deli and sausages to Maritime and Prairie retail chains.
-            4. **🐕 Pet Food & Animal Feed Preparations:**
-               * *The Deficit Reality:* Canada imports over **$1.5B in pet food**, mostly from the U.S.
-               * *Ontario Opportunity:* Utilizing local livestock by-products and grain to manufacture domestic pet food for all provinces.
-            5. **🍎 Craft Cider, Wine & Specialty Beverages:**
-               * *Ontario Clusters:* Niagara, Prince Edward County, and Georgian Bay apple/grape production.
-               * *National Opportunity:* Displacing imported U.S. hard seltzers, ciders, and table wines in provincial liquor board channels.
+            1. **🍅 Primary Greenhouse Vegetables, Floriculture & Nursery (`NAICS 1114`):**
+               * *National Primary Ag Surplus:* **+$2.39 Billion CAD** (`$2.59B` exports vs. `$202M` imports in `111419`).
+               * *National Opportunity:* Replacing U.S. and Mexican field produce in Quebec, the Prairies, and Atlantic Canada year-round through Ontario's Kingsville/Leamington and Niagara primary greenhouse clusters.
+            2. **🍞 Bakery, Tortilla & Cereal Preparations (`NAICS 311814` / `311821`):**
+               * *National U.S. Import Pool:* **`$2.29 Billion CAD`** (`$1.49B` commercial bakeries + `$800M` cookie/cracker).
+               * *National Opportunity:* Utilizing Ontario's country-leading bakery manufacturing hub to displace U.S. shipments into Western and Eastern Canada.
+            3. **🥩 Value-Added Meat & Poultry Processing (`NAICS 31161`):**
+               * *Ontario Strength:* High provincial hog/cattle production and federally inspected processing capacity.
+               * *National Opportunity:* Supplying pre-packaged deli, bacon, and prepared meats to Maritime and Prairie retail chains.
+            4. **🐕 Dog & Cat Food Manufacturing (`NAICS 311111`):**
+               * *The Deficit Reality:* Canada imports **`$1.39 Billion CAD`** in dog and cat food from the U.S.
+               * *Ontario Opportunity:* Utilizing local livestock by-products, corn, and soybean meal to manufacture domestic pet food for all provinces.
+            5. **🍎 Craft Cider, Wine, Distilleries & Specialty Beverages (`NAICS 3121`):**
+               * *The Deficit Reality:* Canada imports **`$1.44 Billion CAD`** in U.S. beverages (`$538M` wines `312130`, `$564M` soft drinks `312110`, `$259M` spirits `312140`).
+               * *National Opportunity:* Displacing U.S. wines, ciders, and spirits across provincial liquor board channels.
             """
         )
         

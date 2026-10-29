@@ -148,7 +148,31 @@ def get_net_balance(year: str, trade_mode: str = "domestic") -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def get_state_trade(year: str, trade_type: str = None, chapter: str = None) -> pd.DataFrame:
+def _get_omafa_scale_factor(year: str, trade_mode: str = "domestic") -> float:
+    """Return the OMAFA commercial re-export scale factor for agri-food exports when trade_mode == 'total'."""
+    if trade_mode != "total" or year not in OMAFA_TOTAL_EXPORTS_BENCHMARK:
+        return 1.0
+    conn = _get_conn()
+    df = pd.read_sql(
+        """
+        SELECT hs2_chapter, sum(value_cad) as value_cad
+        FROM state_hs_trade
+        WHERE substr(ref_date, 1, 4) = ? AND trade_type = 'Domestic exports'
+        GROUP BY hs2_chapter
+        """,
+        conn,
+        params=[year],
+    )
+    curr = df[df["hs2_chapter"].isin(AGRI_FOOD_CHAPTERS)]["value_cad"].sum()
+    if curr > 0:
+        return float(OMAFA_TOTAL_EXPORTS_BENCHMARK[year] / curr)
+    return 1.0
+
+
+@st.cache_data(ttl=3600)
+def get_state_trade(
+    year: str, trade_type: str = None, chapter: str = None, trade_mode: str = "domestic"
+) -> pd.DataFrame:
     """State-level trade data, optionally filtered by trade type and chapter.
 
     For Chapter 87, if chapter is '87-AG' or '87-AUTO', filters accordingly.
@@ -197,6 +221,12 @@ def get_state_trade(year: str, trade_type: str = None, chapter: str = None) -> p
         elif chapter in ("ALL_AGRI_FOOD", None):
             df = df[df["hs2_chapter"].isin(AGRI_FOOD_CHAPTERS)]
 
+    # Apply OMAFA Total Commercial scale factor if trade_mode == 'total'
+    if trade_mode == "total":
+        sf = _get_omafa_scale_factor(year, trade_mode="total")
+        agri_exp = df["hs2_chapter"].isin(AGRI_FOOD_CHAPTERS) & (df["trade_type"] == "Domestic exports")
+        df.loc[agri_exp, "value_cad"] *= sf
+
     # Aggregate after split
     df = (
         df.groupby(["state", "hs2_chapter", "trade_type"], as_index=False)["value_cad"]
@@ -211,12 +241,14 @@ def get_state_trade(year: str, trade_type: str = None, chapter: str = None) -> p
 
 
 @st.cache_data(ttl=3600)
-def get_state_summary_for_map(year: str, trade_type: str, chapter: str = None) -> pd.DataFrame:
+def get_state_summary_for_map(
+    year: str, trade_type: str, chapter: str = None, trade_mode: str = "domestic"
+) -> pd.DataFrame:
     """Aggregate trade by state for choropleth map.
 
     Returns one row per state with: state, state_abbrev, value_cad.
     """
-    df = get_state_trade(year, trade_type, chapter)
+    df = get_state_trade(year, trade_type, chapter, trade_mode=trade_mode)
     agg = df.groupby(["state", "state_abbrev"], as_index=False)["value_cad"].sum()
     return agg.sort_values("value_cad", ascending=False)
 
@@ -965,4 +997,279 @@ def get_eu_headline_metrics() -> dict:
         "primary_ag_count": primary_ag_count,
         "ceta_tariff_pct": 0.0,
     }
+
+
+# ── Phase 2: Inter-Provincial NAPCS & National 6-Digit NAICS Queries ─
+
+@st.cache_data(ttl=3600)
+def get_provincial_napcs_summary(
+    year: str,
+    napcs_sector: str = "Farm, fishing and intermediate food products [C11]",
+    partner: str = "United States",
+) -> pd.DataFrame:
+    """Return provincial import and export flows by NAPCS sector from provincial_napcs_trade.
+
+    Isolates Rest-of-Canada (ROC) U.S. imports across all provinces that Ontario can replace.
+    """
+    conn = _get_conn()
+    df = pd.read_sql(
+        """
+        SELECT geo, trade_type, sum(value_thousands_cad) * 1000.0 as value_cad
+        FROM provincial_napcs_trade
+        WHERE substr(ref_date, 1, 4) = ?
+          AND napcs = ?
+          AND partner = ?
+        GROUP BY geo, trade_type
+        """,
+        conn,
+        params=[str(year), napcs_sector, partner],
+    )
+    if df.empty:
+        return pd.DataFrame()
+
+    piv = df.pivot_table(
+        index="geo", columns="trade_type", values="value_cad", aggfunc="sum", fill_value=0.0
+    ).reset_index()
+    for col in ("Domestic export", "Import", "Re-export"):
+        if col not in piv.columns:
+            piv[col] = 0.0
+    piv["Domestic Exports"] = piv["Domestic export"]
+    piv["Re-exports"] = piv["Re-export"]
+    piv["Total Exports"] = piv["Domestic export"] + piv["Re-export"]
+    piv["Imports"] = piv["Import"]
+    piv["Net Balance"] = piv["Total Exports"] - piv["Imports"]
+    return piv[[
+        "geo", "Domestic Exports", "Re-exports", "Total Exports", "Imports", "Net Balance"
+    ]].sort_values("Imports", ascending=False).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def get_national_naics_detail(year: str, partner: str = "United States") -> pd.DataFrame:
+    """Return 6-digit NAICS Canada-wide Exports, Imports, and Net Balance from national_naics_trade.
+
+    Strictly classifies NAICS 1114 (Greenhouse, Nursery & Floriculture) alongside NAICS 111 & 112
+    as Primary Agriculture per OFA policy convention.
+    """
+    conn = _get_conn()
+    df = pd.read_sql(
+        """
+        SELECT naics_desc, trade_type, sum(value_dollars) as value_cad,
+               max(is_primary_agriculture) as is_primary_agriculture,
+               max(is_naics_1114) as is_naics_1114
+        FROM national_naics_trade
+        WHERE substr(ref_date, 1, 4) = ? AND partner = ?
+        GROUP BY naics_desc, trade_type
+        """,
+        conn,
+        params=[str(year), partner],
+    )
+    if df.empty:
+        return pd.DataFrame()
+
+    df["naics_code"] = df["naics_desc"].str.extract(r"\[(\d+)\]")
+    df6 = df[df["naics_code"].str.len() == 6].copy()
+
+    piv = df6.pivot_table(
+        index=["naics_code", "naics_desc", "is_primary_agriculture", "is_naics_1114"],
+        columns="trade_type",
+        values="value_cad",
+        aggfunc="sum",
+        fill_value=0.0,
+    ).reset_index()
+
+    for col in ("Domestic export", "Export", "Exports", "Import", "Imports", "Re-export", "Re-exports"):
+        if col not in piv.columns:
+            piv[col] = 0.0
+
+    piv["Domestic Exports"] = piv["Domestic export"] + piv["Export"] + piv["Exports"]
+    piv["Re-exports"] = piv["Re-export"] + piv["Re-exports"]
+    piv["Total Exports"] = piv["Domestic Exports"] + piv["Re-exports"]
+    piv["Imports"] = piv["Import"] + piv["Imports"]
+    piv["Net Balance"] = piv["Total Exports"] - piv["Imports"]
+    piv["Import Deficit"] = piv["Net Balance"].apply(lambda x: abs(x) if x < 0 else 0.0)
+    piv["naics_clean"] = piv["naics_desc"].str.replace(r"\s*\[\d+\]\s*$", "", regex=True)
+
+    def _naics_sector(row):
+        code = str(row["naics_code"])
+        if row["is_naics_1114"] == 1 or code.startswith("1114"):
+            return "🌸 Primary Agriculture — Greenhouse, Nursery & Floriculture (NAICS 1114)"
+        if code.startswith("111"):
+            return "🌾 Primary Agriculture — Field Crops, Fruit & Vegetables (NAICS 111)"
+        if code.startswith("112"):
+            return "🐄 Primary Agriculture — Livestock, Dairy, Poultry & Honey (NAICS 112)"
+        if code.startswith("311") or code.startswith("312"):
+            return "🏭 Food, Beverage & Feed Processing (NAICS 311/312)"
+        if code.startswith("3253"):
+            return "🧪 Farm Inputs — Fertilizers & Crop Protection (NAICS 3253)"
+        return "⚙️ Other Industrial / Manufacturing"
+
+    piv["sector_group"] = piv.apply(_naics_sector, axis=1)
+    return piv.sort_values("Imports", ascending=False).reset_index(drop=True)
+
+
+# ── Phase 3: AAFC Horizontal Remission & Ch. 72/73 Boundary Checker ─
+
+def evaluate_aafc_remission_ruling(hs_input: str, end_use: str) -> dict:
+    """Evaluate Canadian Counter-Tariff and CBSA Code 25-0466C Horizontal Remission eligibility
+    based on Order in Council P.C. 2026-0785, the United States Surtax Remission Order, and
+    AAFC's October 28, 2026 Chapter 72/73 Steel vs. Non-Steel boundary guidance.
+    """
+    clean_code = "".join(ch for ch in str(hs_input).strip() if ch.isdigit())
+    if len(clean_code) < 4:
+        return {
+            "valid": False,
+            "error": "Please enter at least a 4-digit or 6-digit HS code (e.g., 8433.90, 7308.90, 8716.39, 1901.20).",
+        }
+
+    ch2 = clean_code[:2].zfill(2)
+    hs6_prefix = clean_code[:6]
+
+    conn = _get_conn()
+    ct_df = pd.read_sql(
+        "SELECT * FROM canada_counter_tariffs WHERE hs6_clean LIKE ? OR replace(tariff_item, '.', '') LIKE ?",
+        conn,
+        params=[f"{hs6_prefix}%", f"{clean_code}%"],
+    )
+
+    is_ch72_73 = ch2 in ("72", "73")
+    is_trailer = clean_code.startswith("8716")
+    is_turf = clean_code.startswith("843311")
+    is_qualifying_end_use = any(
+        tag in str(end_use)
+        for tag in ("Primary Agriculture", "Food, Beverage", "Agricultural Produce Packaging")
+    )
+
+    in_schedule = not ct_df.empty
+    if in_schedule:
+        max_rate = float(ct_df["tariff_rate_pct"].max())
+        sample_desc = str(ct_df["hs_heading_description"].iloc[0])
+        carm_code = "26186A (15%)" if max_rate == 15 else ("26186B (25%)" if max_rate == 25 else "26186C (50%)")
+    else:
+        max_rate = 25.0 if is_ch72_73 else 0.0
+        sample_desc = (
+            f"Chapter {ch2} Iron/Steel Article (Schedule 2/2.1 Steel Surtax Order)"
+            if is_ch72_73
+            else f"HS {clean_code} (Not listed on Sept 8, 2026 Counter-Tariff Schedule)"
+        )
+        carm_code = "Steel Surtax Order (25%)" if is_ch72_73 else "None (0% MFN/CUSMA)"
+
+    if is_ch72_73:
+        in_schedule = True
+        ruling_badge = "🔴 Excluded from Ag Horizontal Remission (Ch. 72/73 Steel)"
+        net_rate = max_rate
+        special_auth = "Not Eligible for Ag Horizontal Remission (Auto/Aerospace Only)"
+        explanation = (
+            f"Under the *United States Surtax Order (Steel and Aluminum, 2025)* and AAFC's October 28, 2026 guidance, "
+            f"goods classified in **Chapters 72 and 73** (HS `{clean_code}`) are legally defined as **'steel goods'** "
+            f"(Schedule 2/2.1). They do **not** qualify for the broad non-steel horizontal remission for agriculture/food processing."
+        )
+    elif not in_schedule:
+        ruling_badge = "⚪ Not on Counter-Tariff Schedule (0% Duty)"
+        net_rate = 0.0
+        special_auth = "Not Required (0% MFN/CUSMA)"
+        explanation = (
+            f"HS `{clean_code}` (Chapter `{ch2}`) is **not** listed on Canada's September 8, 2026 Counter-Tariff Schedules 1, 2, or 3, "
+            f"and is outside Chapters 72/73. Imports enter at **0% duty** without needing a remission code."
+        )
+    elif is_trailer or is_turf:
+        ruling_badge = "🔴 Active Surtax — Excluded Category (Trailers / Commercial Turf)"
+        net_rate = max_rate
+        special_auth = "Excluded Category (Full Surtax Applies)"
+        explanation = (
+            f"Although HS `{clean_code}` is outside Chapters 72/73, road/farm transport trailers (`8716`) and commercial lawn/turf mowers (`8433.11`) "
+            f"fall outside direct on-farm agricultural harvesting/production machinery and manufacturing input definitions under CBSA Customs Notice 26-23."
+        )
+    elif is_qualifying_end_use:
+        ruling_badge = "🟢 0% Net Duty — Eligible for Horizontal Remission (`25-0466C`)"
+        net_rate = 0.0
+        special_auth = "CBSA Field 84: 25-0466C (Valid to June 30, 2027)"
+        explanation = (
+            f"Per AAFC's October 28, 2026 confirmation, because HS `{clean_code}` is classified **outside Chapters 72 and 73** (even if made of steel, "
+            f"such as Chapter 84 agricultural/food machinery `{clean_code}`), it is legally classified as a **'non-steel good'**. "
+            f"When imported for **{end_use}**, the **{max_rate:.0f}%** surtax (`{carm_code}`) is **100% waived (0% net duty)** by entering "
+            f"Special Authorization Code **`25-0466C`** in Field 84 of the Commercial Accounting Declaration (CAD) for imports up to **June 30, 2027**."
+        )
+    else:
+        ruling_badge = f"🔴 {max_rate:.0f}% Surtax Payable (Non-Qualifying End-Use)"
+        net_rate = max_rate
+        special_auth = "Ineligible End-Use (Full Surtax Applies)"
+        explanation = (
+            f"HS `{clean_code}` is outside Chapters 72/73 and would qualify if imported for Primary Agriculture (NAICS 11) or Food/Beverage Processing & Packaging (NAICS 311/312), "
+            f"but general commercial/retail imports outside manufacturing or agriculture pay the headline **{max_rate:.0f}%** surtax (`{carm_code}`)."
+        )
+
+    return {
+        "valid": True,
+        "hs2_chapter": ch2,
+        "is_steel_ch72_73": is_ch72_73,
+        "in_counter_tariff_schedule": in_schedule,
+        "headline_rate_pct": max_rate,
+        "net_rate_pct": net_rate,
+        "carm_surtax_code": carm_code,
+        "special_auth_code": special_auth,
+        "matched_desc": sample_desc,
+        "ruling_badge": ruling_badge,
+        "statutory_explanation": explanation,
+        "sunset_date": "June 30, 2027",
+    }
+
+
+# ── Phase 5: Packaging, Wood, Paper & Machinery NAICS Benchmark ─────
+
+@st.cache_data(ttl=3600)
+def get_oct23_naics_packaging_context(year: str = "2024") -> pd.DataFrame:
+    """Return U.S. Census 4-digit NAICS bilateral trade benchmarks from census_us_state_exports_to_canada
+    for the packaging, wood, paper, plastics, resin, carpet, and machinery sectors modified on Oct 23, 2026.
+    """
+    conn = _get_conn()
+    target_naics = (
+        "3331", "3332", "3334", "3261", "3252", "3222", "3221", "3255", "3212", "3141", "3219"
+    )
+    placeholders = ",".join(["?"] * len(target_naics))
+    df_tot = pd.read_sql(
+        f"""
+        SELECT naics as naics4, naics_desc, val_usd_year as us_to_canada_exports_usd
+        FROM census_us_state_exports_to_canada
+        WHERE state = '-' AND year = ? AND naics IN ({placeholders})
+        ORDER BY val_usd_year DESC
+        """,
+        conn,
+        params=[int(year), *target_naics],
+    )
+    df_states = pd.read_sql(
+        f"""
+        SELECT naics as naics4, state, val_usd_year
+        FROM census_us_state_exports_to_canada
+        WHERE state != '-' AND year = ? AND naics IN ({placeholders})
+        ORDER BY naics, val_usd_year DESC
+        """,
+        conn,
+        params=[int(year), *target_naics],
+    )
+    top_state_map = {}
+    if not df_states.empty:
+        for n4, grp in df_states.groupby("naics4"):
+            top3 = grp.head(3)
+            top_state_map[str(n4)] = ", ".join(
+                f"{r['state']} (${r['val_usd_year']/1e6:,.0f}M)" for _, r in top3.iterrows()
+            )
+
+    mapping = {
+        "3331": "🟢 Removed: Egg/Fruit Grading (8433.60) | Agriculture, Construction & Mining Machinery",
+        "3332": "🟢 Removed: Food Packaging & Bottling Machinery (8422.30/.40, 8419.89)",
+        "3334": "🟢 Removed: Cold-Chain Refrigeration (8418.69) | 🔴 Added: Chest Freezers (8418.30)",
+        "3261": "🟢 Removed: Plastic Produce Crates (3923.10), Poly Bags (3923.21) & BOPP Film (3920.20)",
+        "3222": "🟢 Removed: Corrugated Boxes (4819.10) & Egg Trays (4823.70) | 🔴 Added: >=40cm Ag Sacks (4819.30) & Labels (4821.90)",
+        "3221": "🟢 Removed: Aseptic Dairy Carton Stock (4811.51) | 🔴 Added: Kraft & Unbleached Paper (4802/4804/4807)",
+        "3252": "🔴 Added: Bottle-Grade PET Resin >=78 ml/g (3907.61) & Polyurethanes (3909.50)",
+        "3255": "🔴 Added: Orchard/Nursery Grafting Putty, Greenhouse Mastics (3214.10) & Acrylic Paints (3208.20)",
+        "3212": "🟢 Removed: Thin Hardwood Plywood <=6mm (4412.33/.34) | 🔴 Added: MDF & Hardboard (4411.12/.92)",
+        "3141": "🔴 Added: 43 HTS Lines of Wool, Fine Animal Hair, Coconut Coir & Textile Carpets (5701–5705)",
+        "3219": "🔴 Added: Solid Wooden Packing Boxes (4415.10.30) & Food Skewers/Sticks (4421.99.60)",
+    }
+    df_tot["oct23_relevance"] = df_tot["naics4"].map(lambda c: mapping.get(str(c), "Oct 23 Packaging/Industrial Context"))
+    df_tot["top_us_origin_states"] = df_tot["naics4"].map(lambda c: top_state_map.get(str(c), "U.S. General"))
+    return df_tot
+
+
 

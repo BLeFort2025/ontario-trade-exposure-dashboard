@@ -6,7 +6,9 @@ from lib.data_loader import (
     get_tariff_matched_exports, 
     get_canada_counter_tariffs, 
     get_us_section338_tariffs,
-    get_us_section338_oct23_reshuffle
+    get_us_section338_oct23_reshuffle,
+    evaluate_aafc_remission_ruling,
+    get_oct23_naics_packaging_context
 )
 from lib.chapter_labels import chapter_label
 from lib.geo_utils import get_valid_state_names
@@ -43,6 +45,68 @@ with tab1:
         * **Special Authorization Remission Code `25-0466C` (0% Net Duty Through June 30, 2027):** Pursuant to the *United States Surtax Remission Order*, "steel goods" are strictly limited to **Chapters 72 and 73**. All goods made of steel classified outside Chapters 72 and 73—including agricultural equipment and combine parts under **Chapter 84 (`HS 8433.90`, `8433.20`)**—are legally classified as **"non-steel goods"** and qualify for **0% net duty horizontal remission** when imported for **agriculture, agri-food, and food & beverage processing or packaging (NAICS 11 & 31–33)** for imports up to **June 30, 2027**.
         """
     )
+
+    # --- INTERACTIVE AAFC HORIZONTAL REMISSION & CHAPTER 72/73 RULING TOOL ---
+    with st.expander("🧭 **Interactive AAFC Horizontal Remission & Chapter 72/73 'Steel vs. Non-Steel' Boundary Ruling Tool**", expanded=True):
+        st.caption(
+            "Verify whether any imported tariff line qualifies for 0% horizontal remission under AAFC's October 2026 "
+            "guidance, CBSA Customs Notice 26-23, and the *United States Surtax Remission Order (SOR/2025-122)*."
+        )
+        rul_col1, rul_col2 = st.columns([1.2, 1.8])
+        with rul_col1:
+            hs_query_input = st.text_input(
+                "Enter 4, 6, or 8-Digit HS Tariff Code (e.g., `8433.90`, `7308.90`, `8716.39`, `1901.20`):",
+                value="8433.90",
+                key="remission_hs_input"
+            )
+        with rul_col2:
+            end_use_input = st.selectbox(
+                "Select Importer End-Use / NAICS Classification:",
+                options=[
+                    "🌾 Primary Agriculture (NAICS 111 / 112 — incl. NAICS 1114 Greenhouse, Nursery & Floriculture)",
+                    "🏭 Food, Beverage & Feed Processing (NAICS 311 / 312)",
+                    "📦 Food, Beverage & Agricultural Produce Packaging",
+                    "🏢 General Commercial / Non-Manufacturing / Retail Distribution",
+                ],
+                index=0,
+                key="remission_end_use_input"
+            )
+
+        ruling = evaluate_aafc_remission_ruling(hs_query_input, end_use_input)
+        if ruling.get("valid"):
+            rc1, rc2, rc3, rc4 = st.columns(4)
+            rc1.metric(
+                "Chapter 72/73 Steel Status",
+                "Ch. 72/73 Steel Good" if ruling["is_steel_ch72_73"] else "Non-Steel Good (Outside 72/73)",
+                delta=f"Chapter {ruling['hs2_chapter']}",
+                delta_color="inverse" if ruling["is_steel_ch72_73"] else "normal"
+            )
+            rc2.metric(
+                "Headline Counter-Tariff",
+                f"{ruling['headline_rate_pct']:.0f}%" if ruling["in_counter_tariff_schedule"] else "0% (Not Listed)",
+                delta=ruling["carm_surtax_code"],
+                delta_color="off"
+            )
+            rc3.metric(
+                "Effective Net Duty Rate",
+                f"{ruling['net_rate_pct']:.0f}%",
+                delta="Waived via Code 25-0466C" if (ruling["in_counter_tariff_schedule"] and ruling["net_rate_pct"] == 0) else ruling["ruling_badge"],
+                delta_color="normal" if ruling["net_rate_pct"] == 0 else "inverse"
+            )
+            rc4.metric(
+                "Remission Sunset Date",
+                ruling["sunset_date"],
+                delta="CBSA Field 84: 25-0466C" if "25-0466C" in ruling["special_auth_code"] else "No Ag Horizontal Waiver",
+                delta_color="normal" if "25-0466C" in ruling["special_auth_code"] else "off"
+            )
+            if ruling["net_rate_pct"] == 0 and ruling["in_counter_tariff_schedule"]:
+                st.success(f"**{ruling['ruling_badge']}** — **{ruling['matched_desc']}**: {ruling['statutory_explanation']}")
+            elif not ruling["in_counter_tariff_schedule"]:
+                st.info(f"**{ruling['ruling_badge']}**: {ruling['statutory_explanation']}")
+            else:
+                st.error(f"**{ruling['ruling_badge']}** — **{ruling['matched_desc']}**: {ruling['statutory_explanation']}")
+        else:
+            st.warning(ruling.get("error", "Please enter a valid HS code."))
     
     try:
         imports_df = get_tariff_matched_imports(year=selected_year)
@@ -302,6 +366,39 @@ with tab2:
                 file_name="us_section338_oct23_2026_reshuffle_122_lines.csv",
                 mime="text/csv",
                 key="oct23_dl"
+            )
+
+    # --- PHASE 5: U.S. CENSUS 4-DIGIT NAICS PACKAGING, WOOD, PAPER & MACHINERY CONTEXT ---
+    with st.expander("📦 **Empirical Bilateral Trade Context for Non-Agri-Food Packaging, Wood, Paper, Plastics & Machinery Sectors (`census_us_state_exports_to_canada`)**", expanded=False):
+        st.markdown(
+            """
+            Because `state_hs_trade` is scoped specifically to **HS Chapters 01–24 (Agri-Food)** and **Chapters 31, 38, 84, 87 (Farm Inputs & Machinery)**, 
+            non-agricultural industrial packaging, wood, paper, plastics, coatings, and textile lines in **HS Chapters 32, 39, 44, 48, and 57** display `— (Non-Ag DB / $0)` at the 6-digit HS level above.
+            
+            To provide an **evidence-based macroeconomic baseline** without using synthetic placeholders, the table below links the October 23, 2026 Section 338 reshuffle sectors to **official U.S. Census Bureau 4-digit NAICS bilateral trade (`census_us_state_exports_to_canada`, 2024 USD)**. *(For exact 8-digit HTSUS / 6-digit HS bilateral flows for Chapters 32, 39, 44, 48, and 57, query USITC DataWeb or Statistics Canada CIMT Table 12-10-0119-01).*
+            """
+        )
+        try:
+            pkg_ctx_df = get_oct23_naics_packaging_context(year="2024")
+        except Exception as e:
+            st.error(f"Error loading NAICS packaging context: {e}")
+            pkg_ctx_df = pd.DataFrame()
+
+        if not pkg_ctx_df.empty:
+            pkg_disp = pkg_ctx_df.copy()
+            pkg_disp["US->Canada Exports (2024 USD)"] = pkg_disp["us_to_canada_exports_usd"].apply(format_currency)
+            st.dataframe(
+                pkg_disp[[
+                    "naics4", "naics_desc", "oct23_relevance",
+                    "US->Canada Exports (2024 USD)", "top_us_origin_states"
+                ]].rename(columns={
+                    "naics4": "4-Digit NAICS",
+                    "naics_desc": "NAICS Industry Group",
+                    "oct23_relevance": "Oct 23, 2026 Section 338 Tariff Lines & Ag Supply-Chain Role",
+                    "top_us_origin_states": "Top U.S. Exporting States to Canada (2024 USD)"
+                }),
+                use_container_width=True,
+                hide_index=True
             )
 
     st.markdown("---")
